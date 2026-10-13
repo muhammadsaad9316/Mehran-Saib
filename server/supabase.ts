@@ -82,7 +82,7 @@ export class SupabasePersistence {
       const detail = (await response.json().catch(() => ({}))) as {
         code?: string;
       };
-      if (detail.code === "40001")
+      if (detail.code === "PT409" || detail.code === "40001")
         throw new SupabaseConflictError(
           "The database was updated by another process.",
         );

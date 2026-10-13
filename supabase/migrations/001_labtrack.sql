@@ -35,7 +35,8 @@ declare current_revision bigint;
 begin
   select revision into current_revision from public.labtrack_meta where id = 1 for update;
   if current_revision <> expected_revision then
-    raise exception 'LabTrack database revision changed' using errcode = '40001';
+    -- A version conflict is not transient; 40001 makes PostgREST 14 retry forever.
+    raise sqlstate 'PT409' using message = 'LabTrack database revision changed';
   end if;
   delete from public.labtrack_records r
     using jsonb_to_recordset(deletions) d(collection text, id text)

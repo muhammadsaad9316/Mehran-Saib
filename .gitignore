@@ -9,6 +9,7 @@ data/
 !.env.production.example
 !.env.supabase.example
 .vercel/
+supabase/.temp/
 *.log
 artifacts/
 

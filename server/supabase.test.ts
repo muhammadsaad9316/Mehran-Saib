@@ -76,16 +76,18 @@ test("Supabase rejects browser keys, invalid state, conflicts and errors without
       /HTTP 503/.test(error.message) &&
       !error.message.includes(config.secretKey),
   );
-  const conflict = new SupabasePersistence(config, async () =>
-    json({ code: "40001" }, 409),
-  );
-  await assert.rejects(
-    conflict.write(emptyDatabase(), {
-      ...emptyDatabase(),
-      sessions: [{ id: "s", userId: "u", expiresAt: 1 }],
-    }),
-    SupabaseConflictError,
-  );
+  for (const code of ["PT409", "40001"]) {
+    const conflict = new SupabasePersistence(config, async () =>
+      json({ code }, 409),
+    );
+    await assert.rejects(
+      conflict.write(emptyDatabase(), {
+        ...emptyDatabase(),
+        sessions: [{ id: "s", userId: "u", expiresAt: 1 }],
+      }),
+      SupabaseConflictError,
+    );
+  }
 });
 
 test("Supabase store keeps failed writes out of memory and recovers its write queue", async (t) => {
@@ -111,6 +113,7 @@ test("Supabase store keeps failed writes out of memory and recovers its write qu
 
 test("Supabase stale writes reload the latest state and return a refreshable conflict", async (t) => {
   let reads = 0;
+  let writes = 0;
   t.mock.method(globalThis, "fetch", async (url: string) => {
     if (url.endsWith("labtrack_read")) {
       const data = emptyDatabase();
@@ -118,7 +121,8 @@ test("Supabase stale writes reload the latest state and return a refreshable con
         data.sessions.push({ id: "remote", userId: "u", expiresAt: 100 });
       return json({ revision: reads, data });
     }
-    return json({ code: "40001" }, 409);
+    writes++;
+    return json({ code: "PT409" }, 409);
   });
   const store = new Store("unused-supabase-test-directory", undefined, config);
   await store.open();
@@ -129,5 +133,7 @@ test("Supabase stale writes reload the latest state and return a refreshable con
     (error: { status: number }) => error.status === 409,
   );
   assert.equal(store.data.sessions[0].id, "remote");
+  assert.equal(writes, 1);
+  assert.equal(reads, 2);
   await store.close();
 });
