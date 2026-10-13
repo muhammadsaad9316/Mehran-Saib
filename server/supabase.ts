@@ -112,6 +112,12 @@ export class SupabasePersistence {
     return result.data;
   }
 
+  async loginAttempt(key: string, clear: boolean): Promise<boolean> {
+    const result = await this.rpc("labtrack_login_attempt", { attempt_key: key, clear_attempts: clear });
+    if (typeof result !== "boolean") throw new Error("Supabase returned an invalid login limit.");
+    return result;
+  }
+
   async write(previous: Database, next: Database): Promise<void> {
     const upserts: {
       collection: string;

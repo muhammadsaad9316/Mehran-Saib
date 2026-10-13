@@ -111,6 +111,51 @@ test("Supabase store keeps failed writes out of memory and recovers its write qu
   await store.close();
 });
 
+test("serverless writes preserve concurrent saves from independent instances", async (t) => {
+  let remote = emptyDatabase();
+  let revision = 0;
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    if (url.endsWith("labtrack_read")) return json({ revision, data: remote });
+    const body = JSON.parse(String(options.body));
+    if (body.expected_revision !== revision) return json({ code: "PT409" }, 409);
+    for (const item of body.upserts) {
+      const rows = remote[item.collection as keyof typeof remote] as { id: string }[];
+      const index = rows.findIndex(row => row.id === item.id);
+      if (index < 0) rows.push(item.document);
+      else rows[index] = item.document;
+    }
+    return json(++revision);
+  });
+  const a = new Store("unused", undefined, config, 8);
+  const b = new Store("unused", undefined, config, 8);
+  await Promise.all([a.open(), b.open()]);
+  await Promise.all([
+    a.mutate(data => data.sessions.push({ id: "a", userId: "u1", expiresAt: 100 })),
+    b.mutate(data => data.sessions.push({ id: "b", userId: "u2", expiresAt: 100 })),
+  ]);
+  assert.deepEqual(remote.sessions.map(s => s.id).sort(), ["a", "b"]);
+  assert.equal(revision, 2);
+});
+
+test("serverless conflict retries are bounded and repeat validation against fresh records", async (t) => {
+  let writes = 0;
+  let validations = 0;
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    if (url.endsWith("labtrack_read")) return json({ revision: writes, data: emptyDatabase() });
+    writes++;
+    return json({ code: "PT409" }, 409);
+  });
+  const store = new Store("unused", undefined, config, 3);
+  await store.open();
+  await assert.rejects(store.mutate(data => {
+    validations++;
+    data.sessions.push({ id: "s", userId: "u", expiresAt: 100 });
+  }), (error: { status: number }) => error.status === 409);
+  assert.equal(writes, 3);
+  assert.equal(validations, 3);
+  assert.deepEqual(store.data, emptyDatabase());
+});
+
 test("Supabase stale writes reload the latest state and return a refreshable conflict", async (t) => {
   let reads = 0;
   let writes = 0;

@@ -18,7 +18,7 @@ test("API reads recover from a proxy restart; writes and real API errors are not
     calls++;
     return new Response("", { status: 500 });
   });
-  await assert.rejects(api("/auth/login", { method: "POST" }), /restarting/);
+  await assert.rejects(api("/auth/login", { method: "POST" }), /temporarily unavailable/);
   assert.equal(calls, 1);
 
   calls = 0;

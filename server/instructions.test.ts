@@ -62,7 +62,7 @@ test("extracts the original Lab 2 PDF without inventing filenames", async () => 
 test("rejects invalid base64, oversize content, malformed documents and legacy DOC", async () => {
   const attachment = { name: "instructions.pdf", contentType: "application/pdf", content: "YR==" };
   await assert.rejects(analyzeInstructions(attachment), /valid base64/);
-  await assert.rejects(analyzeInstructions({ ...attachment, content: Buffer.alloc(5 * 1024 * 1024 + 1).toString("base64") }), /5 MB/);
+  await assert.rejects(analyzeInstructions({ ...attachment, content: Buffer.alloc(3 * 1024 * 1024 + 1).toString("base64") }), /3 MB/);
   await assert.rejects(analyzeInstructions({ ...attachment, content: Buffer.from("Not a PDF").toString("base64") }), /valid PDF/);
   await assert.rejects(analyzeInstructions({ ...attachment, name: "instructions.doc", contentType: "application/msword", content: Buffer.from("legacy").toString("base64") }), /legacy .doc/);
   await assert.rejects(analyzeInstructions({ ...attachment, name: "instructions.docx", contentType: "application/octet-stream", content: Buffer.from("Not a ZIP").toString("base64") }), /valid document/);

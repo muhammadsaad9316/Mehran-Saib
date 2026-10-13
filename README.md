@@ -6,7 +6,7 @@ A working Web Engineering lab submission and grading app. React + TypeScript and
 
 Use Node.js 22 or newer.
 
-The selected setup runs the application locally and stores its data in the existing LabTrack Supabase project. Its schema and SQL functions are applied and verified. Follow [the local Supabase setup](docs/supabase-local.md) and fill in the private `.env` values before starting. No application has been uploaded or deployed to Vercel.
+The selected setup runs the application locally and stores its data in the existing LabTrack Supabase project. Its schema and SQL functions are applied and verified. Follow [the local Supabase setup](docs/supabase-local.md) and fill in the private `.env` values before starting. The public site is https://labtrack-lilac.vercel.app; see [deployment details](docs/launch.md).
 
 ```powershell
 npm install
@@ -59,12 +59,12 @@ Express API — role authorization + sessions + validation
 
 ## Deployment and practical limits
 
-Current scope is a local React/Node application with the private Supabase database. Follow [the local guide](docs/supabase-local.md). Optional separate-backend hosting templates remain in the repository, but public deployment is deferred. Vercel-only hosting will need a separate adaptation and hosted verification.
+The public site runs on Vercel with its Express API and the private Supabase database. No Render service is needed. See [deployment details and free-plan limits](docs/launch.md). The local workflow remains available through [the local guide](docs/supabase-local.md).
 
-For a real class, use a **fresh database**, disable demo mode, configure a unique initial teacher password and serve the app over HTTPS. Production refuses the seeded demo database. MongoDB writes require an Atlas cluster or replica set for transactions. This version runs in one server process; it does not synchronize in-memory reads across multiple application instances.
+For a real class, use a **fresh database**, disable demo mode, configure a unique initial teacher password and serve the app over HTTPS. Production refuses the seeded demo database. MongoDB writes require an Atlas cluster or replica set for transactions. The Vercel handler reads fresh data for each request and retries atomic saves against current records. The local JSON/MongoDB server continues to assume one process.
 
 Uploaded code runs only inside the isolated preview. Its asset loads and fetch requests are restricted by CSP; JavaScript execution is allowed within that sandbox. External libraries, module imports and remote project links are not fetched or executed by the server. Similarity is heuristic evidence for human review. It neither proves copying nor assigns marks, and the app contains no AI authorship detection.
 
 The preview follows the opaque iframe approach described in [MDN's srcdoc security guidance](https://developer.mozilla.org/en-US/docs/Web/API/HTMLIFrameElement/srcdoc). The session cookie configuration follows [Express's session security guidance](https://expressjs.com/en/resources/middleware/session/).
 
-Supabase schema, role grants, real SQL read/write execution, and local teacher/student sign-in are verified. The teacher sees all 41 students and both draft labs through the Supabase-backed API. Public hosting is not deployed or verified. [Backend configuration and limits](docs/backend.md) has the API and storage details. Existing MongoDB support remains available for older configurations.
+Supabase schema, role grants, real SQL read/write execution, and local teacher/student sign-in are verified. The teacher sees all 41 students and both draft labs through the Supabase-backed API. Public hosting, secure teacher/student sign-in, private access and sign-out are verified. [Backend configuration and limits](docs/backend.md) has the API and storage details. Existing MongoDB support remains available for older configurations.

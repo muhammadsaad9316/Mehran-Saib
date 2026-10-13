@@ -14,7 +14,7 @@ export interface InstructionDraft {
   text: string;
 }
 
-const maxBytes = 5 * 1024 * 1024;
+const maxBytes = 3 * 1024 * 1024;
 const htmlTags = new Set("html head title meta link style body h1 h2 h3 h4 h5 h6 p br hr pre b strong i em mark del ins sub sup q abbr address bdo samp var font a img div span section article header footer main nav aside ul ol li dl dt dd table caption thead tbody tfoot tr th td form label input textarea select option optgroup button fieldset legend script noscript code blockquote cite kbd small u s audio video source canvas iframe details summary time figure figcaption picture source area map object embed base wbr data output progress meter".split(" "));
 
 function fileBytes(attachment: InstructionAttachment) {
@@ -23,9 +23,9 @@ function fileBytes(attachment: InstructionAttachment) {
   if (!/\.(pdf|docx?|txt|md)$/i.test(attachment.name)) throw new Error("Choose a PDF, Word, or plain text instruction document.");
   const acceptedTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/markdown", "application/octet-stream"];
   if (!acceptedTypes.includes(attachment.contentType)) throw new Error("Unsupported instruction document type.");
-  if (!attachment.content || attachment.content.length > 4 * Math.ceil(maxBytes / 3) || attachment.content.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(attachment.content)) throw new Error("Instructions must contain valid base64 and be no larger than 5 MB.");
+  if (!attachment.content || attachment.content.length > 4 * Math.ceil(maxBytes / 3) || attachment.content.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(attachment.content)) throw new Error("Instructions must contain valid base64 and be no larger than 3 MB.");
   const bytes = Buffer.from(attachment.content, "base64");
-  if (!bytes.length || bytes.length > maxBytes || bytes.toString("base64") !== attachment.content) throw new Error("Instructions must contain valid base64 and be no larger than 5 MB.");
+  if (!bytes.length || bytes.length > maxBytes || bytes.toString("base64") !== attachment.content) throw new Error("Instructions must contain valid base64 and be no larger than 3 MB.");
   return bytes;
 }
 

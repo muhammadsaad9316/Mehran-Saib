@@ -32,7 +32,7 @@ export async function api<T = unknown>(
           result?.error ||
             result?.message ||
             (restarting
-              ? "The local API is restarting. Try again in a moment."
+              ? "The workspace is temporarily unavailable. Try again in a moment."
               : `Request failed (${response.status})`),
         ),
         { status: response.status },

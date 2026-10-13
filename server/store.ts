@@ -54,6 +54,7 @@ export class Store {
     private readonly dataDir: string,
     private readonly mongoUri?: string,
     supabase?: SupabaseConfig,
+    private readonly writeAttempts = 1,
   ) {
     if (mongoUri && supabase)
       throw new Error("Configure one database provider: Supabase or MongoDB.");
@@ -95,21 +96,25 @@ export class Store {
 
   async mutate<T>(change: (database: Database) => T): Promise<T> {
     const operation = this.pending.then(async () => {
-      const previous = this.data;
-      const next = structuredClone(previous);
-      const result = change(next);
+      let previous = this.data;
+      let next = structuredClone(previous);
+      let result = change(next);
       if (this.supabase) {
-        try {
-          await this.supabase.write(previous, next);
-        } catch (error) {
-          if (error instanceof SupabaseConflictError) {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await this.supabase.write(previous, next);
+            break;
+          } catch (error) {
+            if (!(error instanceof SupabaseConflictError)) throw error;
             this.data = await this.supabase.load();
-            throw new HttpError(
-              409,
-              "The database changed. Refresh your workspace before saving again.",
-            );
+            if (attempt + 1 >= this.writeAttempts)
+              throw new HttpError(409, "The database changed. Refresh your workspace before saving again.");
+            await new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 75));
+            previous = this.data;
+            next = structuredClone(previous);
+            // Re-run validation against current records; never replay an old snapshot.
+            result = change(next);
           }
-          throw error;
         }
       } else if (this.db) {
         // shortcut: in-memory reads assume one server process; refresh shared state before scaling horizontally.
@@ -162,5 +167,10 @@ export class Store {
   async close(): Promise<void> {
     await this.pending;
     await this.client?.close();
+  }
+
+  async loginAttempt(key: string, clear = false): Promise<boolean> {
+    if (!this.supabase) throw new Error("Shared login limits require Supabase.");
+    return this.supabase.loginAttempt(key, clear);
   }
 }

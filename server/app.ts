@@ -2,7 +2,7 @@ import express, { type Request, type Response } from "express";
 import cookieParser from "cookie-parser";
 import multer from "multer";
 import { existsSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -69,6 +69,7 @@ export interface AppOptions {
   adminName?: string;
   supabaseUrl?: string;
   supabaseKey?: string;
+  serverless?: boolean;
 }
 
 function text(
@@ -259,11 +260,11 @@ function validateLab(body: unknown, old?: Lab): Lab {
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
         content,
       ) ||
-      Buffer.from(content, "base64").length > 5 * 1024 * 1024
+      Buffer.from(content, "base64").length > 3 * 1024 * 1024
     )
       throw new HttpError(
         400,
-        "Instruction file must be valid base64 and no larger than 5 MB.",
+        "Instruction file must be valid base64 and no larger than 3 MB.",
       );
     const acceptedTypes = [
       "application/pdf",
@@ -338,6 +339,7 @@ export async function createApp(options: AppOptions = {}) {
     supabaseUrl && supabaseKey
       ? { url: supabaseUrl, secretKey: supabaseKey }
       : undefined,
+    options.serverless ? 8 : 1,
   );
   await store.open();
   if (
@@ -423,9 +425,24 @@ export async function createApp(options: AppOptions = {}) {
     });
   }
   const app = express();
+  if (options.serverless) app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.locals.store = store;
   app.locals.demo = demo;
+  if (options.serverless) {
+    // Chunk JSON responses so a class roster with project files can be streamed.
+    app.use((_req, res, next) => {
+      res.json = (body: unknown) => {
+        const json = Buffer.from(JSON.stringify(body));
+        res.type("json");
+        for (let offset = 0; offset < json.length; offset += 64 * 1024)
+          res.write(json.subarray(offset, offset + 64 * 1024));
+        res.end();
+        return res;
+      };
+      next();
+    });
+  }
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
@@ -567,6 +584,9 @@ export async function createApp(options: AppOptions = {}) {
     );
     const password = passwordValue(req.body?.password);
     const key = `${req.ip}|${user?.id || email}`;
+    const sharedKey = createHash("sha256").update(user?.id || email).digest("hex");
+    if (options.serverless && !(await store.loginAttempt(sharedKey)))
+      throw new HttpError(429, "Too many login attempts. Try again in 15 minutes.");
     const previous = failures.get(key);
     if (previous && previous.resetAt > Date.now() && previous.count >= 8)
       throw new HttpError(
@@ -587,6 +607,7 @@ export async function createApp(options: AppOptions = {}) {
       throw new HttpError(401, "Email, roll number or password is incorrect.");
     }
     failures.delete(key);
+    if (options.serverless) await store.loginAttempt(sharedKey, true);
     await signIn(user, res);
   });
   app.post("/api/auth/demo", async (req, res) => {
@@ -684,6 +705,8 @@ export async function createApp(options: AppOptions = {}) {
     if (!old) throw new HttpError(404, "Lab not found.");
     const lab = validateLab({ ...old, ...req.body }, old);
     await store.mutate((data) => {
+      if (JSON.stringify(data.labs.find((item) => item.id === old.id)) !== JSON.stringify(old))
+        throw new HttpError(409, "This lab changed. Refresh before saving again.");
       for (const submission of data.submissions.filter(
         (item) => item.labId === lab.id,
       )) {

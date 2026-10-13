@@ -1,6 +1,6 @@
 # Local LabTrack with Supabase
 
-The application runs at `http://127.0.0.1:5173`; its Node API runs on localhost port 3001. The private database is the existing [LabTrack Supabase project](https://supabase.com/dashboard/project/akudfcgksdjlipxxwfdu). No application has been uploaded or deployed to Vercel.
+The application runs at `http://127.0.0.1:5173`; its Node API runs on localhost port 3001. The private database is the existing [LabTrack Supabase project](https://supabase.com/dashboard/project/akudfcgksdjlipxxwfdu). The public site is https://labtrack-lilac.vercel.app; this guide covers local development.
 
 ## Database setup completed
 
@@ -34,10 +34,10 @@ During development, saving `.env` automatically restarts the API. If the secret 
 
 `npm run prepare:class` reopens the existing local credentials without generating new passwords. `npm run provision:class` can check/provision the class once the key is configured; it refuses to reset conflicting existing credentials and preserves saved work. The private JSON/CSV credential files are excluded from source archives and deployment uploads.
 
-The backend is one local Node process. Records persist in Supabase across restarts. Restart it after manual database changes, since it holds a working snapshot in memory. File upload limits are 60 files, 1 MB per source file and 4 MB total uploaded/extracted project content. Original instruction documents may be up to 5 MB while the API is local.
+The backend is one local Node process. Records persist in Supabase across restarts. Restart it after manual database changes, since it holds a working snapshot in memory. File upload limits are 60 files, 1 MB per source file and 4 MB total uploaded/extracted project content. Original instruction documents may be up to 3 MB.
 
 ## Final connection check
 
 After entering the local settings, verify teacher sign-in/out, create a real lab or student, restart the Node process, and confirm that the record remains in both the portal and `labtrack_records`. Check task upload, sandboxed preview, grading and the per-lab CSV/print sheet before using it for the class.
 
-A future Vercel deployment requires a separate hosting adaptation and hosted end-to-end verification. The empty Vercel project is reserved; there is no public LabTrack deployment.
+The Vercel serverless deployment is implemented and live. See [deployment details](launch.md) for its verified behavior, secret settings and usage limits.
