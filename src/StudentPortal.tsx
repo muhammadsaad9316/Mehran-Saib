@@ -10,7 +10,6 @@ import {
   CheckCircle,
   Clock,
   DownloadSimple,
-  Flask,
   SignOut,
   Tray,
   UploadSimple,
@@ -18,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import type { AppState, Lab, Submission } from "../shared/types";
 import { studentProgress } from "./student-progress";
+import BrandLogo from "./BrandLogo";
 
 interface Props {
   state: AppState;
@@ -133,8 +133,7 @@ export default function StudentPortal({
             navigate("labs");
           }}
         >
-          <Flask size={26} weight="bold" />
-          <span className="teacher-rail-wordmark">LabTrack<span>.</span></span>
+          <BrandLogo />
         </a>
         <span className="teacher-rail-label">Workspace</span>
         <nav aria-label="Student navigation">
@@ -155,12 +154,6 @@ export default function StudentPortal({
             </button>
           ))}
         </nav>
-        <div className="teacher-rail-course">
-          <span className="teacher-rail-course-icon"><BookOpen size={20} /></span>
-          <strong>Web Engineering</strong>
-          <span>Fall 2026 · Semester 07</span>
-          <small>Learning workspace</small>
-        </div>
       </aside>
       <div className="teacher-workspace">
         <header className="teacher-header">
@@ -172,7 +165,7 @@ export default function StudentPortal({
               navigate("labs");
             }}
           >
-            <span className="teacher-header-mobile-brand">LabTrack<span className="teacher-brand-dot">.</span></span>
+            <span className="teacher-header-mobile-brand"><BrandLogo /></span>
             <span className="teacher-breadcrumb"><BookOpen size={17} /> Learning <CaretRight size={12} /><strong>{page === "labs" ? "My labs" : "My submissions"}</strong></span>
           </a>
           <div className="teacher-account">
@@ -324,7 +317,7 @@ export default function StudentPortal({
                   <h2>
                     My labs <span>{labs.length}</span>
                   </h2>
-                  <p>Open a lab to explore its tasks and submit your work.</p>
+                  <p>Select a task to submit or resubmit work. Open a lab for its instructions.</p>
                 </div>
               </div>
               {labs.length > 0 && (
@@ -373,6 +366,7 @@ export default function StudentPortal({
                     <div className="student-lab-progress">
                       <div
                         className="student-task-track"
+                        role="group"
                         aria-label={`${submitted} of ${lab.tasks.length} tasks submitted`}
                       >
                         {lab.tasks.map((task, index) => {
@@ -380,24 +374,32 @@ export default function StudentPortal({
                             (item) => item.taskId === task.id,
                           );
                           return (
-                            <span
+                            <button
                               key={task.id}
+                              type="button"
                               className={
                                 item?.grade?.published
                                   ? "graded"
                                   : item
                                     ? "submitted"
-                                    : ""
+                                    : "to-submit"
                               }
-                              title={`Task ${index + 1}: ${status(item)}`}
+                              title={`${task.title} · ${item ? "Resubmit this task" : "Submit this task"}`}
+                              aria-label={`Task ${index + 1}: ${task.title}. ${status(item)}. ${item ? "Resubmit task" : "Submit task"}`}
+                              onClick={() => onSubmit(lab, task.id)}
                             >
-                              {item ? (
-                                <CheckCircle size={16} />
-                              ) : (
-                                <span className="student-track-dot" />
-                              )}
-                              <span>Task {index + 1}</span>
-                            </span>
+                              <span className="student-track-title">
+                                {item?.grade?.published ? (
+                                  <CheckCircle size={18} weight="fill" />
+                                ) : item ? (
+                                  <Clock size={18} />
+                                ) : (
+                                  <UploadSimple size={18} />
+                                )}
+                                <span>Task {index + 1}</span>
+                              </span>
+                              <small>{status(item)}</small>
+                            </button>
                           );
                         })}
                       </div>

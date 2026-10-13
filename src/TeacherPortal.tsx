@@ -22,6 +22,7 @@ import {
 import type { AppState, Lab, Submission, User } from "../shared/types";
 import { byRollNumber } from "../shared/roster";
 import CheckTasks from "./CheckTasks";
+import BrandLogo from "./BrandLogo";
 
 interface Props {
   state: AppState;
@@ -146,8 +147,7 @@ export default function TeacherPortal({
             navigate("dashboard");
           }}
         >
-          <Flask size={26} weight="bold" />
-          <span className="teacher-rail-wordmark">LabTrack<span>.</span></span>
+          <BrandLogo />
         </a>
         <span className="teacher-rail-label">Workspace</span>
         <nav aria-label="Teacher navigation">
@@ -173,12 +173,6 @@ export default function TeacherPortal({
             </button>
           ))}
         </nav>
-        <div className="teacher-rail-course">
-          <span className="teacher-rail-course-icon"><BookOpen size={20} /></span>
-          <strong>Web Engineering</strong>
-          <span>Fall 2026 · Semester 07</span>
-          <small>Teaching workspace</small>
-        </div>
       </aside>
       <div className="teacher-workspace">
         <header className="teacher-header">
@@ -190,7 +184,7 @@ export default function TeacherPortal({
               navigate("dashboard");
             }}
           >
-            <span className="teacher-header-mobile-brand">LabTrack<span className="teacher-brand-dot">.</span></span>
+            <span className="teacher-header-mobile-brand"><BrandLogo /></span>
             <span className="teacher-breadcrumb"><SquaresFour size={17} /> Workspace <CaretRight size={12} /><strong>{page === "dashboard" ? "Overview" : page === "labs" ? "Labs" : page === "checks" ? "Check tasks" : "Students"}</strong></span>
           </a>
           <div className="teacher-account">

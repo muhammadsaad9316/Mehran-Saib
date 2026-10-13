@@ -254,21 +254,31 @@
   flex-wrap: wrap;
   gap: 0.375rem;
 }
-.student-task-track > span {
+.student-task-track > button {
   flex: 1;
-  min-width: 4.5rem;
+  min-width: 64px;
+  min-height: 64px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.625rem 0.5rem;
+  gap: 6px;
+  padding: 12px 6px;
   border: 1px solid var(--teacher-edge);
   border-radius: 0.5rem;
   background: var(--teacher-control);
   color: var(--teacher-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
+.student-track-title { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.student-track-title svg { flex-shrink: 0; width: 16px; height: 16px; }
+.student-task-track > button small { font-size: 11px; font-weight: 500; line-height: 1.4; }
+.student-task-track > .to-submit { border-color: #d9b19e; background: #fff6f0; color: var(--teacher-action); }
+.student-task-track > button:hover { border-color: currentColor; transform: translateY(-2px); }
+.student-task-track > button:active { transform: translateY(0); }
+.student-task-track > button:focus-visible { outline: 2px solid var(--teacher-focus); outline-offset: 3px; }
 .student-task-track > .submitted {
   border-color: transparent;
   background: var(--student-submitted-surface);
@@ -278,13 +288,6 @@
   border-color: transparent;
   background: var(--student-graded-surface);
   color: var(--student-graded-ink);
-}
-.student-track-dot {
-  width: 0.375rem;
-  height: 0.375rem;
-  background: var(--teacher-pencil);
-  border-radius: 50%;
-  opacity: 0.6;
 }
 .student-outline-button {
   display: inline-flex;
@@ -856,6 +859,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .student-task-caret,
+  .student-task-track > button,
   .student-task summary,
   .student-lab-info h3 button,
   .student-outline-button {

@@ -10,7 +10,17 @@
   --workspace-focus: #9c4527;
   --workspace-mono: "IBM Plex Mono", monospace;
   --workspace-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --brand-accent: #a64e2d;
+  --brand-window: #f7f5f0;
 }
+
+.brand-logo { display: inline-flex; align-items: center; gap: 10px; font-family: "Manrope Variable", sans-serif; font-size: var(--brand-size, 24px); font-weight: 800; line-height: 1.1; letter-spacing: -1.2px; white-space: nowrap; }
+.brand-logo-icon { display: block; flex-shrink: 0; width: 40px; height: 31px; }
+.brand-logo-wordmark > span { color: var(--brand-accent); }
+.teacher-header-mobile-brand { --brand-size: 23px; }
+.teacher-header-mobile-brand .brand-logo-icon { display: none; }
+.loading-brand { --brand-size: 28px; }
+.loading-brand .brand-logo-icon { width: 48px; height: 37px; }
 
 /* Entry screens share the quiet paper and graphite of the classroom workspace. */
 .login-page,
@@ -27,6 +37,9 @@
   padding: 24px;
 }
 .login-brand {
+  --brand-accent: #e6a180;
+  --brand-window: #252a27;
+  --brand-size: 30px;
   min-height: calc(100dvh - 48px);
   justify-content: space-between;
   padding: clamp(32px, 4vw, 56px);
@@ -45,18 +58,7 @@
   font-weight: 750;
   letter-spacing: -1.2px;
 }
-.login-brand .logo-mark,
-.loading-screen .logo-mark {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  color: var(--workspace-paper);
-  background: var(--workspace-accent);
-}
-.login-brand-dot,
-.loading-brand-dot { color: var(--workspace-accent); }
+.login-brand .brand-logo-icon { width: 52px; height: 40px; }
 .login-brand .eyebrow {
   color: #b8bcb5;
   font-family: var(--workspace-mono);
@@ -290,6 +292,7 @@
   .login-page { padding: 12px; }
   .login-brand { padding: 24px; gap: 24px; border-radius: 12px; }
   .login-brand .brand { font-size: 23px; }
+  .login-brand { --brand-size: 27px; }
   .login-brand h1 { font-size: 43px; }
   .login-brand h1 br { display: block; }
   .login-brand p { font-size: 13px; }

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Flask,
   Plus,
   ArrowUpRight,
   ArrowRight,
@@ -19,6 +18,7 @@ import Review from "./Review";
 import LabEditor from "./LabEditor";
 import TeacherPortal from "./TeacherPortal";
 import StudentPortal from "./StudentPortal";
+import BrandLogo from "./BrandLogo";
 const date = (
   value: string,
   options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" },
@@ -197,10 +197,7 @@ export default function App() {
     return (
       <main className="loading-screen">
         <div className="loading-brand">
-        <div className="logo-mark" aria-hidden="true">
-          <Flask size={28} weight="light" />
-        </div>
-        <span>LabTrack<span className="loading-brand-dot">.</span></span>
+          <BrandLogo />
         </div>
         <div className="loading-content" role={error ? "alert" : "status"}>
           <div className="eyebrow">WEB ENGINEERING WORKSPACE</div>
@@ -438,10 +435,7 @@ function Login({
     <main className="login-page">
       <section className="login-brand" aria-label="LabTrack course workspace">
         <div className="brand">
-          <span className="logo-mark" aria-hidden="true">
-            <Flask size={25} weight="light" />
-          </span>
-          <span>LabTrack<span className="login-brand-dot">.</span></span>
+          <BrandLogo />
         </div>
         <div className="login-brand-content">
           <div className="eyebrow">FALL 2026 · SEMESTER 07</div>
