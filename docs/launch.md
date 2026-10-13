@@ -12,7 +12,7 @@ Apply the committed Supabase migrations before deploying a new database. Keep RL
 
 ## Serverless persistence
 
-Each request loads its own current database snapshot, including when Vercel reuses a warm instance. Saves use an atomic revision check. A conflict reloads current records and re-runs the mutation and its validation, with at most eight attempts. Lab edits reject a changed lab, and grades reject a resubmitted revision. There is no unbounded retry loop.
+Each authenticated request validates the current database revision and owns an isolated snapshot. Unchanged warm requests reuse a bounded private cache; health checks and unsigned requests avoid classroom reads entirely. Saves use an atomic revision check. A conflict reloads current records and re-runs the mutation and its validation, with at most eight attempts. Lab edits reject a changed lab, and grades reject a resubmitted revision. There is no unbounded retry loop.
 
 JSON responses are streamed in chunks. Student project uploads allow 60 files, 1 MB per source file, and 4 MB total uploaded/extracted content. Instruction documents allow 3 MB so base64 JSON fits Vercel's request limit. Larger courses will need separate object storage and more selective database reads to stay within free usage quotas.
 
@@ -23,3 +23,5 @@ Production health and anonymous state return uncached JSON. Teacher and student 
 The log-storm repair uses SQLSTATE `PT409` for stale revisions instead of `40001`, which caused PostgREST to retry indefinitely. It is applied to the hosted database and retained in the migration history.
 
 Vercel Hobby and Supabase Free still have usage limits. No paid upgrade or Render billing setup was used. Check provider usage before expanding beyond the current class.
+
+See [the free-tier audit](free-tier-audit.md) for measured usage, safeguards, recovery copies and remaining limits.

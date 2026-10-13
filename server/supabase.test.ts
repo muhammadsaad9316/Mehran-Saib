@@ -53,6 +53,57 @@ test("Supabase sends only changed records and deletions in one versioned transac
   assert.equal(bodies.length, 1);
 });
 
+test("unchanged serverless snapshots transfer no records, isolate callers and refresh after external writes", async () => {
+  let revision = 0;
+  const data = emptyDatabase();
+  data.sessions.push({ id: "first", userId: "u1", expiresAt: 100 });
+  const known: number[] = [];
+  const fetchSnapshot: typeof fetch = async (_url, options) => {
+    const body = JSON.parse(String(options?.body));
+    known.push(body.known_revision);
+    return json({ revision, data: body.known_revision === revision ? null : data });
+  };
+  const cacheConfig = { ...config, url: "https://cache-test.supabase.co", cache: true };
+  const first = new SupabasePersistence(cacheConfig, fetchSnapshot);
+  (await first.load()).sessions[0].id = "caller-edit";
+  const second = new SupabasePersistence(cacheConfig, fetchSnapshot);
+  assert.equal((await second.load()).sessions[0].id, "first");
+  data.sessions.push({ id: "external", userId: "u2", expiresAt: 200 });
+  revision++;
+  assert.equal((await second.load()).sessions.length, 2);
+  assert.deepEqual(known, [-1, 0, 0]);
+  const rotated = new SupabasePersistence({ ...cacheConfig, secretKey: "sb_secret_rotated_testing" }, fetchSnapshot);
+  await rotated.load();
+  assert.equal(known.at(-1), -1);
+});
+
+test("conditional reads fail closed without a matching snapshot and do not reuse stale data on errors", async () => {
+  const cachedConfig = { ...config, url: "https://invalid-cache.supabase.co", cache: true };
+  const invalid = new SupabasePersistence(cachedConfig, async () => json({ revision: 0, data: null }));
+  await assert.rejects(invalid.load(), /invalid LabTrack database/);
+  let unavailable = false;
+  const checked = new SupabasePersistence(cachedConfig, async () => unavailable
+    ? json({}, 503) : json({ revision: 0, data: emptyDatabase() }));
+  await checked.load();
+  unavailable = true;
+  await assert.rejects(checked.load(), /HTTP 503/);
+});
+
+test("storage budget rejects a save without retries or changing saved records", async (t) => {
+  let writes = 0;
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    if (url.endsWith("labtrack_read")) return json({ revision: 0, data: emptyDatabase() });
+    writes++;
+    return json(-1);
+  });
+  const store = new Store("unused", undefined, config, 8);
+  await store.open();
+  await assert.rejects(store.mutate(data => data.sessions.push({ id: "new", userId: "u", expiresAt: 100 })),
+    (error: { status: number; message: string }) => error.status === 507 && /storage is nearly full/.test(error.message));
+  assert.equal(writes, 1);
+  assert.deepEqual(store.data, emptyDatabase());
+});
+
 test("Supabase rejects browser keys, invalid state, conflicts and errors without exposing secrets", async () => {
   assert.throws(
     () => new SupabasePersistence({ ...config, url: "http://example.test" }),
@@ -115,8 +166,9 @@ test("serverless writes preserve concurrent saves from independent instances", a
   let remote = emptyDatabase();
   let revision = 0;
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
-    if (url.endsWith("labtrack_read")) return json({ revision, data: remote });
     const body = JSON.parse(String(options.body));
+    if (url.endsWith("labtrack_read_if_changed"))
+      return json({ revision, data: body.known_revision === revision ? null : remote });
     if (body.expected_revision !== revision) return json({ code: "PT409" }, 409);
     for (const item of body.upserts) {
       const rows = remote[item.collection as keyof typeof remote] as { id: string }[];
@@ -126,8 +178,9 @@ test("serverless writes preserve concurrent saves from independent instances", a
     }
     return json(++revision);
   });
-  const a = new Store("unused", undefined, config, 8);
-  const b = new Store("unused", undefined, config, 8);
+  const cachedConfig = { ...config, url: "https://concurrent-cache.supabase.co", cache: true };
+  const a = new Store("unused", undefined, cachedConfig, 8);
+  const b = new Store("unused", undefined, cachedConfig, 8);
   await Promise.all([a.open(), b.open()]);
   await Promise.all([
     a.mutate(data => data.sessions.push({ id: "a", userId: "u1", expiresAt: 100 })),

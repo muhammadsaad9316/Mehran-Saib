@@ -5,6 +5,7 @@ import type { Activity, Lab, Submission, User } from "../shared/types.js";
 import {
   SupabasePersistence,
   SupabaseConflictError,
+  SupabaseStorageLimitError,
   type SupabaseConfig,
 } from "./supabase.js";
 import { HttpError } from "./uploads.js";
@@ -105,6 +106,8 @@ export class Store {
             await this.supabase.write(previous, next);
             break;
           } catch (error) {
+            if (error instanceof SupabaseStorageLimitError)
+              throw new HttpError(507, error.message);
             if (!(error instanceof SupabaseConflictError)) throw error;
             this.data = await this.supabase.load();
             if (attempt + 1 >= this.writeAttempts)

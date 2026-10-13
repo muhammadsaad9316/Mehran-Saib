@@ -337,7 +337,7 @@ export async function createApp(options: AppOptions = {}) {
       path.join(rootDir, ".data"),
     mongoUri,
     supabaseUrl && supabaseKey
-      ? { url: supabaseUrl, secretKey: supabaseKey }
+      ? { url: supabaseUrl, secretKey: supabaseKey, cache: options.serverless }
       : undefined,
     options.serverless ? 8 : 1,
   );
@@ -584,7 +584,8 @@ export async function createApp(options: AppOptions = {}) {
     );
     const password = passwordValue(req.body?.password);
     const key = `${req.ip}|${user?.id || email}`;
-    const sharedKey = createHash("sha256").update(user?.id || email).digest("hex");
+    // Unknown identities share one budget so random email addresses cannot fill the limiter table.
+    const sharedKey = createHash("sha256").update(user?.id || "unregistered-account").digest("hex");
     if (options.serverless && !(await store.loginAttempt(sharedKey)))
       throw new HttpError(429, "Too many login attempts. Try again in 15 minutes.");
     const previous = failures.get(key);

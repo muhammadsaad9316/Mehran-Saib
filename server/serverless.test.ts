@@ -25,7 +25,8 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
     const body = JSON.parse(String(options.body));
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-    if (url.endsWith("labtrack_read")) return json({ revision, data: remote });
+    if (url.endsWith("labtrack_read_if_changed"))
+      return json({ revision, data: body.known_revision === revision ? null : remote });
     if (url.endsWith("labtrack_login_attempt")) {
       if (body.clear_attempts) { budgets.delete(body.attempt_key); return json(true); }
       const count = (budgets.get(body.attempt_key) || 0) + 1;
@@ -71,6 +72,29 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
   const anonymous = await request(handler).get("/api/state").expect(200);
   assert.deepEqual(anonymous.body.submissions, []);
   for (let n = 0; n < 8; n++)
-    await request(handler).post("/api/auth/login").send({ email: "unknown@example.test", password: "wrong" }).expect(401);
-  await request(handler).post("/api/auth/login").send({ email: "unknown@example.test", password: "wrong" }).expect(429);
+    await request(handler).post("/api/auth/login").send({ email: `unknown-${n}@example.test`, password: "wrong" }).expect(401);
+  await request(handler).post("/api/auth/login").send({ email: "another-unknown@example.test", password: "wrong" }).expect(429);
+  assert.equal(budgets.size, 1);
+  await login("qa@example.test");
+});
+
+test("health checks, anonymous state and unsigned protected requests do not query Supabase", async (t) => {
+  const previous = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY };
+  Object.assign(process.env, { SUPABASE_URL: "https://test.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_testing" });
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  let reads = 0;
+  t.mock.method(globalThis, "fetch", async () => { reads++; throw new Error("Unexpected database read"); });
+  await request(handler).get("/api/health").expect(200).expect("Cache-Control", "no-store");
+  const anonymous = await request(handler).get("/api/state").expect(200);
+  assert.equal(anonymous.body.user, null);
+  assert.deepEqual(anonymous.body.students, []);
+  await request(handler).get("/api/state").set("Cookie", "labtrack_session=malformed").expect(200);
+  await request(handler).post("/api/auth/demo").send({ role: "teacher" }).expect(403);
+  await request(handler).get("/api/reports.csv").expect(401);
+  assert.equal(reads, 0);
 });

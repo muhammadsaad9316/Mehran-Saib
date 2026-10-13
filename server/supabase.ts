@@ -1,10 +1,16 @@
+import { createHash } from "node:crypto";
 import type { Database } from "./store.js";
 
 export interface SupabaseConfig {
   url: string;
   secretKey: string;
+  cache?: boolean;
 }
 export class SupabaseConflictError extends Error {}
+export class SupabaseStorageLimitError extends Error {}
+// One bounded, private snapshot per warm instance; the revision is checked on every read.
+let snapshot: { key: string; revision: number; data: Database } | undefined;
+const MAX_SNAPSHOT_BYTES = 16 * 1024 * 1024;
 const collections = [
   "users",
   "labs",
@@ -16,6 +22,7 @@ const collections = [
 export class SupabasePersistence {
   private revision = 0;
   private readonly endpoint: string;
+  private readonly cacheKey: string;
 
   constructor(
     private readonly config: SupabaseConfig,
@@ -44,6 +51,7 @@ export class SupabasePersistence {
         "Configure a server-only Supabase secret key, not a publishable or anonymous key.",
       );
     this.endpoint = `${url.origin}/rest/v1/rpc/`;
+    this.cacheKey = createHash("sha256").update(`${url.origin}|${config.secretKey}`).digest("hex");
   }
 
   private isServiceRoleKey(key: string) {
@@ -88,7 +96,7 @@ export class SupabasePersistence {
         );
       if (detail.code === "PGRST202")
         throw new Error(
-          "Apply supabase/migrations/001_labtrack.sql before starting the backend.",
+          "Apply the committed Supabase migrations before starting the backend.",
         );
       throw new Error(
         `Supabase persistence failed (HTTP ${response.status}). Check the backend configuration.`,
@@ -98,10 +106,18 @@ export class SupabasePersistence {
   }
 
   async load(): Promise<Database> {
-    const result = (await this.rpc("labtrack_read", {})) as {
+    const cached = this.config.cache && snapshot?.key === this.cacheKey ? snapshot : undefined;
+    const result = (await this.rpc(
+      this.config.cache ? "labtrack_read_if_changed" : "labtrack_read",
+      this.config.cache ? { known_revision: cached?.revision ?? -1 } : {},
+    )) as {
       revision: number;
-      data: Database;
+      data: Database | null;
     };
+    if (cached && result?.data === null && result.revision === cached.revision) {
+      this.revision = result.revision;
+      return structuredClone(cached.data);
+    }
     if (
       !Number.isSafeInteger(result?.revision) ||
       result.revision < 0 ||
@@ -109,7 +125,17 @@ export class SupabasePersistence {
     )
       throw new Error("Supabase returned an invalid LabTrack database.");
     this.revision = result.revision;
-    return result.data;
+    this.remember(result.data!);
+    return result.data!;
+  }
+
+  private remember(data: Database) {
+    if (!this.config.cache || (snapshot?.key === this.cacheKey && snapshot.revision > this.revision)) return;
+    if (Buffer.byteLength(JSON.stringify(data)) > MAX_SNAPSHOT_BYTES) {
+      if (snapshot?.key === this.cacheKey) snapshot = undefined;
+      return;
+    }
+    snapshot = { key: this.cacheKey, revision: this.revision, data: structuredClone(data) };
   }
 
   async loginAttempt(key: string, clear: boolean): Promise<boolean> {
@@ -151,11 +177,14 @@ export class SupabasePersistence {
       upserts,
       deletions,
     });
+    if (revision === -1)
+      throw new SupabaseStorageLimitError("Classroom storage is nearly full. Contact your teacher before uploading more files.");
     if (
       !Number.isSafeInteger(revision) ||
       Number(revision) !== this.revision + 1
     )
       throw new Error("Supabase did not confirm the database revision.");
     this.revision = Number(revision);
+    this.remember(next);
   }
 }
