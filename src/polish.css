@@ -1,0 +1,314 @@
+:root {
+  --workspace-paper: #f7f5f0;
+  --workspace-sheet: #fffefa;
+  --workspace-ink: #252a27;
+  --workspace-muted: #656b65;
+  --workspace-edge: #deded5;
+  --workspace-control: #f2f1eb;
+  --workspace-accent: #bc5c34;
+  --workspace-action: #a64e2d;
+  --workspace-focus: #9c4527;
+  --workspace-mono: "IBM Plex Mono", monospace;
+  --workspace-ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Entry screens share the quiet paper and graphite of the classroom workspace. */
+.login-page,
+.loading-screen {
+  color: var(--workspace-ink);
+  background: var(--workspace-paper);
+  font-family: "DM Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.login-page {
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  align-items: stretch;
+  gap: clamp(40px, 5vw, 80px);
+  padding: 24px;
+}
+.login-brand {
+  min-height: calc(100dvh - 48px);
+  justify-content: space-between;
+  padding: clamp(32px, 4vw, 56px);
+  gap: 48px;
+  background: var(--workspace-ink);
+  border-radius: 16px;
+  color: var(--workspace-paper);
+}
+.login-brand .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  font-family: "Manrope Variable", sans-serif;
+  font-size: 27px;
+  font-weight: 750;
+  letter-spacing: -1.2px;
+}
+.login-brand .logo-mark,
+.loading-screen .logo-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--workspace-paper);
+  background: var(--workspace-accent);
+}
+.login-brand-dot,
+.loading-brand-dot { color: var(--workspace-accent); }
+.login-brand .eyebrow {
+  color: #b8bcb5;
+  font-family: var(--workspace-mono);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+}
+.login-brand h1 {
+  margin: 24px 0;
+  color: var(--workspace-paper);
+  font-family: "Manrope Variable", sans-serif;
+  font-size: clamp(48px, 5.8vw, 84px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -.055em;
+}
+.login-brand p {
+  color: #c6c9c2;
+  font-size: 14px;
+  line-height: 1.75;
+  max-width: 350px;
+}
+.login-specimen {
+  max-width: 430px;
+  margin-top: 40px;
+  font-family: var(--workspace-mono);
+  font-size: 12px;
+  line-height: 1.85;
+}
+.login-specimen-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ffffff26;
+  color: #b6bbb3;
+  font-size: 9px;
+  letter-spacing: .8px;
+}
+.login-code-line { display: flex; gap: 24px; }
+.login-code-line > span { color: #8f988d; font-size: 10px; }
+.login-code-line code { color: #d3d7cf; font: inherit; }
+.login-code-line em { color: #e4a284; font-style: normal; }
+.login-code-cursor { color: #e4a284; }
+.login-brand-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  color: #bbc0b7;
+  font-size: 11px;
+  line-height: 1.75;
+}
+.login-brand-footer > span:last-child {
+  font-family: var(--workspace-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-align: right;
+}
+.login-access {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  padding: 32px 32px 32px 0;
+}
+.login-form {
+  width: 100%;
+  max-width: 400px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.login-form .eyebrow {
+  color: var(--workspace-action);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+.login-form h2 {
+  margin: 16px 0 8px;
+  font-family: "Manrope Variable", sans-serif;
+  font-size: 38px;
+  font-weight: 650;
+  letter-spacing: -1.7px;
+  line-height: 1.2;
+  color: var(--workspace-ink);
+}
+.login-form > p { margin-bottom: 36px; color: var(--workspace-muted); font-size: 14px; }
+.login-form .field { color: var(--workspace-ink); font-size: 12px; font-weight: 600; margin-bottom: 20px; }
+.login-form .field input {
+  height: 48px;
+  border: 1px solid var(--workspace-edge);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--workspace-sheet);
+  color: var(--workspace-ink);
+  font-size: 14px;
+  box-shadow: none;
+}
+.login-form .field input::placeholder { color: #7b8078; font-size: 13px; }
+.login-form .btn,
+.loading-screen .btn {
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--workspace-edge);
+  border-radius: 8px;
+  color: var(--workspace-ink);
+  background: var(--workspace-sheet);
+  font-size: 13px;
+  transition: background 160ms var(--workspace-ease), transform 160ms var(--workspace-ease);
+}
+.login-form .btn:hover { background: var(--workspace-control); }
+.login-form .btn-primary,
+.loading-screen .btn-primary {
+  justify-content: space-between;
+  color: #fff;
+  background: var(--workspace-action);
+  border-color: var(--workspace-action);
+}
+.login-form .btn-primary:hover,
+.loading-screen .btn-primary:hover { background: #8f4024; }
+.login-submit-icon { display: grid; place-items: center; background: none; color: inherit; }
+.login-form .btn:active { transform: scale(.99); }
+.login-form .error { margin: 16px 0 0; color: #963e30; font-size: 13px; }
+.login-form .demo-login { margin-top: 28px; padding-top: 24px; border-color: var(--workspace-edge); gap: 8px; }
+.demo-login > span { margin: 0; text-align: left; font-size: 13px; font-weight: 600; color: var(--workspace-ink); }
+.demo-login > p { margin: 0 0 8px; color: var(--workspace-muted); font-size: 12px; }
+.login-form .demo-login .btn { min-height: 64px; gap: 12px; justify-content: flex-start; padding: 12px 14px; }
+.demo-login .btn > span { flex: 1; text-align: left; }
+.demo-login .btn small { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
+.demo-login .btn > svg { flex-shrink: 0; color: var(--workspace-muted); }
+.login-access-note { display: flex; align-items: center; gap: 8px; color: var(--workspace-muted); font-size: 11px; }
+.loading-screen { min-height: 100dvh; height: auto; padding: 48px 24px; gap: 32px; text-align: center; }
+.loading-brand { display: flex; align-items: center; gap: 12px; font-family: "Manrope Variable", sans-serif; font-size: 26px; font-weight: 750; letter-spacing: -1px; }
+.loading-content { max-width: 480px; }
+.loading-content .eyebrow { color: var(--workspace-action); font-size: 9px; letter-spacing: 1.5px; }
+.loading-content h1 { margin: 20px 0 12px; font-family: "Manrope Variable", sans-serif; font-size: 34px; line-height: 1.3; letter-spacing: -1.2px; text-wrap: balance; }
+.loading-content p { color: var(--workspace-muted); font-size: 13px; }
+.loading-progress { display: block; width: 160px; height: 3px; margin: 28px auto 0; overflow: hidden; border-radius: 4px; background: var(--workspace-edge); }
+.loading-progress > span { display: block; width: 45%; height: 100%; background: var(--workspace-accent); animation: workspace-loading 1.5s var(--workspace-ease) infinite; }
+.loading-caption { color: var(--workspace-muted); font-size: 11px; }
+
+/* Keep review, grading and editing on the same restrained paper system. */
+.teacher-minimal .modal-overlay { background: #252a2770; backdrop-filter: blur(6px); }
+.teacher-minimal .modal {
+  border: 1px solid var(--teacher-edge);
+  border-radius: 16px;
+  background: var(--teacher-sheet);
+  color: var(--teacher-ink);
+  font-family: "DM Sans", sans-serif;
+  box-shadow: 0 24px 80px #252a2726;
+  animation: modal-enter 200ms var(--workspace-ease) both;
+}
+.teacher-minimal .modal :is(h2, h3, h4) { font-family: "Manrope Variable", sans-serif; letter-spacing: -.5px; }
+.teacher-minimal .modal-head { padding: 24px 28px; }
+.teacher-minimal .modal-head h2 { font-size: 23px; line-height: 1.35; text-wrap: balance; }
+.teacher-minimal .modal-head p { font-size: 12px; line-height: 1.6; }
+.teacher-minimal .modal :is(.modal-head, .modal-foot, .tabs, .grading-panel, .submission-facts, .student-history > div:first-child, .history-row, .task-editor, .analysis-metrics, .analysis-summary, .similarity-row, .file-bar, .preview-note, .matching-evidence) { border-color: var(--teacher-edge); }
+.teacher-minimal .modal :is(.modal-foot, .grading-panel, .file-bar, .code-view aside, .preview-note, .task-editor, .workspace-info, .matching-evidence) { background: var(--teacher-control); }
+.teacher-minimal .modal-body { padding: 24px 28px; }
+.teacher-minimal .modal .field { font-size: 12px; font-weight: 600; color: var(--teacher-ink); }
+.teacher-minimal .modal .field :is(input:not([type="checkbox"]), textarea, select) {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--teacher-edge);
+  border-radius: 8px;
+  background: var(--teacher-sheet);
+  box-shadow: none;
+  color: var(--teacher-ink);
+  font-size: 13px;
+  font-weight: 400;
+}
+.teacher-minimal .modal .field :is(input, textarea)::placeholder { color: var(--teacher-pencil); }
+.teacher-minimal .modal .btn { min-height: 44px; border: 1px solid var(--teacher-edge); border-radius: 8px; box-shadow: none; background: var(--teacher-sheet); color: var(--teacher-ink); font-size: 12px; transition: background 160ms var(--workspace-ease), transform 160ms var(--workspace-ease); }
+.teacher-minimal .modal .btn:hover { background: var(--teacher-control); }
+.teacher-minimal .modal .btn-primary { background: var(--workspace-action); border-color: var(--workspace-action); color: #fff; }
+.teacher-minimal .modal .btn-primary:hover { background: #8f4024; }
+.teacher-minimal .modal :is(.muted, .check-field, .preview-security, .submission-facts span, .grading-panel > p, .requirement-list p, .analysis-summary, .student-history p, .history-row small, .task-description) { color: var(--teacher-muted); font-size: 12px; }
+.teacher-minimal .modal :is(.submission-facts strong, .requirement-list strong, .quality-item strong, .history-row strong) { color: var(--teacher-ink); font-size: 12px; }
+.teacher-minimal .modal .tabs { gap: 24px; padding: 0 24px; }
+.teacher-minimal .modal .tabs button { min-height: 52px; font-size: 12px; }
+.teacher-minimal .modal .tabs button.active { color: var(--workspace-action); border-color: var(--workspace-action); }
+.teacher-minimal .modal .file-bar select { min-height: 32px; color: var(--teacher-ink); font-size: 12px; }
+.teacher-minimal .modal .preview-security { font-size: 10px; }
+.teacher-minimal .modal .source pre { background: var(--teacher-sheet); color: var(--teacher-ink); font-family: var(--workspace-mono); font-size: 12px; }
+.teacher-minimal .modal .line-number { color: var(--teacher-pencil); }
+.teacher-minimal .modal .code-view aside :is(button, a) { min-height: 40px; color: var(--teacher-muted); font-size: 12px; }
+.teacher-minimal .modal .code-view aside button.active { color: var(--workspace-action); background: #bc5c3414; }
+.teacher-minimal .modal .analysis-metrics strong { color: var(--teacher-ink); font-size: 32px; }
+.teacher-minimal .modal .analysis-metrics small { color: var(--teacher-muted); }
+.teacher-minimal .modal .marks-input { border: 1px solid var(--teacher-edge); border-radius: 8px; box-shadow: none; background: var(--teacher-sheet); }
+.teacher-minimal .modal .marks-input input { box-shadow: none; }
+.teacher-minimal .modal .check-field { min-height: 44px; }
+.teacher-minimal .modal .check-field input { width: 18px; height: 18px; accent-color: var(--workspace-action); }
+.teacher-minimal .modal .quality-item { background: #f4ecdb; color: #79602f; }
+.teacher-minimal .modal .quality-item p { color: #79602f; font-size: 12px; }
+.teacher-minimal .modal .matching-evidence pre { color: var(--teacher-ink); font-family: var(--workspace-mono); font-size: 11px; }
+.teacher-minimal .modal .student-score { color: var(--workspace-action); }
+.teacher-minimal .modal .student-score small { color: var(--teacher-muted); }
+.teacher-minimal .modal .upload-zone { padding: 28px 16px; background: var(--teacher-control); border-color: var(--teacher-edge); color: var(--workspace-action); }
+.teacher-minimal .modal .upload-zone.dragging { background: #bc5c3414; border-color: var(--workspace-action); }
+.teacher-minimal .modal .upload-zone strong { color: var(--teacher-ink); font-size: 15px; }
+.teacher-minimal .modal .upload-zone p { color: var(--teacher-muted); font-size: 12px; }
+.teacher-minimal .modal .optional-link summary { min-height: 44px; padding-block: 12px; color: var(--teacher-ink); font-size: 12px; cursor: pointer; }
+.teacher-minimal .modal .selected-files :is(div, small) { color: var(--teacher-muted); font-size: 12px; }
+.teacher-minimal .modal .selected-files > div { border-color: var(--teacher-edge); }
+.teacher-minimal .modal .warning-note { background: #f4ecdb; border-color: #e1d4b9; color: #79602f; font-size: 12px; }
+.teacher-minimal .modal .error { background: #faeeea; border-color: #e9c9bc; color: #963e30; font-size: 12px; }
+.teacher-minimal .modal .success { background: #eaf0e5; color: #476443; font-size: 12px; }
+.teacher-minimal .toast { background: var(--teacher-graphite); border-radius: 10px; box-shadow: 0 8px 24px #252a2726; font-size: 13px; padding: 14px 20px; }
+.teacher-minimal .toast svg { color: #bbcfb0; flex-shrink: 0; }
+.login-page :is(button, input):focus-visible,
+.loading-screen button:focus-visible,
+.teacher-minimal .modal :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: 3px; }
+.login-page input:focus { outline: 2px solid var(--workspace-focus); outline-offset: 2px; }
+
+@keyframes workspace-loading { from { transform: translateX(-110%); } to { transform: translateX(330%); } }
+@media (max-width: 900px) {
+  .login-page { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 16px; }
+  .login-brand { min-height: auto; padding: 32px; gap: 32px; }
+  .login-brand h1 { font-size: 56px; margin-block: 16px; }
+  .login-brand h1 br { display: none; }
+  .login-specimen { display: none; }
+  .login-brand-footer > span:last-child { display: none; }
+  .login-access { padding: 48px 24px 24px; gap: 32px; }
+}
+@media (max-width: 480px) {
+  .login-page { padding: 12px; }
+  .login-brand { padding: 24px; gap: 24px; border-radius: 12px; }
+  .login-brand .brand { font-size: 23px; }
+  .login-brand h1 { font-size: 43px; }
+  .login-brand h1 br { display: block; }
+  .login-brand p { font-size: 13px; }
+  .login-brand-footer { font-size: 10px; }
+  .login-access { padding: 36px 12px 20px; }
+  .login-form h2 { font-size: 32px; }
+  .login-form .field input { font-size: 16px; }
+  .teacher-minimal .modal-overlay { padding: 12px; }
+  .teacher-minimal .modal { border-radius: 12px; max-height: calc(100dvh - 24px); }
+  .teacher-minimal .modal :is(.modal-head, .modal-body) { padding: 20px; }
+  .teacher-minimal .modal-head h2 { font-size: 20px; }
+  .teacher-minimal .modal-foot { padding: 16px 20px; }
+  .teacher-minimal .modal .field :is(input:not([type="checkbox"]), textarea, select) { font-size: 16px; }
+  .teacher-minimal .modal .tabs { padding-inline: 20px; gap: 20px; }
+  .teacher-minimal .modal .upload-buttons { flex-wrap: wrap; justify-content: center; }
+  .teacher-minimal .modal .upload-buttons .btn { min-width: 120px; }
+  .loading-content h1 { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-progress > span { animation: none; transform: translateX(60%); }
+  .login-page *, .teacher-minimal .modal { animation: none; transition: none; }
+}

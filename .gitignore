@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/
+.data/
+.production-smoke/
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.supabase.example
+.vercel/
+*.log
+artifacts/
+
