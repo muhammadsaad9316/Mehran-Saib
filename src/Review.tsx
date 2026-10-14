@@ -8,14 +8,12 @@ import {
   WarningCircle,
   FileCode,
   ArrowSquareOut,
-  FloppyDisk,
   DownloadSimple,
   CaretRight,
   CaretLeft,
   ArrowRight,
   Clock,
   Globe,
-  ChartBar,
 } from "@phosphor-icons/react";
 import type { AppState, AnalysisResult, Submission } from "../shared/types";
 import { byRollNumber } from "../shared/roster";
@@ -922,16 +920,6 @@ export default function Review({
                       ) : (
                         "Save (Last student)"
                       )}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn full review-save-only-btn"
-                      onClick={() => grade(false)}
-                      disabled={!canSave}
-                      title="Save grade without moving to the next student"
-                    >
-                      <FloppyDisk size={14} />
-                      {busy ? "Saving…" : "Save grade only"}
                     </button>
                   </div>
                 </>
