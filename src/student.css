@@ -867,3 +867,315 @@
   }
 }
 
+/* Student sidebar credit - Plain text with Quordix logo (Two lines, centered, no scale) */
+.student-rail-footer {
+  display: none;
+}
+
+.upload-mobile-copy,
+.student-mobile-credit {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .student-shell .teacher-rail {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    display: block;
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--teacher-edge);
+    box-shadow: 0 -8px 24px #0f172a0a;
+  }
+
+  .student-shell .teacher-rail-logo {
+    display: none;
+  }
+
+  .student-shell .teacher-rail nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    max-width: 480px;
+    margin-inline: auto;
+    gap: 8px;
+  }
+
+  .student-shell .teacher-rail nav button {
+    width: 100%;
+    min-width: 0;
+    min-height: 54px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .student-shell .teacher-rail nav button.active {
+    color: var(--teacher-action);
+    background: var(--workspace-tint);
+  }
+
+  .student-shell .teacher-workspace {
+    padding-inline: 16px;
+  }
+
+  .student-shell .teacher-header {
+    min-height: 64px;
+  }
+
+  .student-shell .teacher-main {
+    padding-top: 20px;
+    padding-bottom: calc(90px + env(safe-area-inset-bottom));
+  }
+
+  .student-title {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .student-title .teacher-title-copy h1 {
+    font-size: clamp(1.75rem, 7.5vw, 2.25rem);
+  }
+
+  .student-title .teacher-title-copy > p {
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+
+  .student-heading-actions {
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .student-overview {
+    gap: 18px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+
+  .student-progress-strip dd {
+    font-size: 1.5rem;
+  }
+
+  .student-progress-strip dt {
+    font-size: 0.6875rem;
+  }
+
+  .student-section-heading,
+  .student-detail-heading,
+  .student-lab-intro {
+    padding-inline: 16px;
+  }
+
+  .student-shell .teacher-lab-filters {
+    padding-inline: 16px;
+    gap: 18px;
+  }
+
+  .student-lab,
+  .student-submission {
+    padding: 18px 16px;
+  }
+
+  .student-task-track {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: 8px;
+  }
+
+  .student-task-track > button {
+    min-width: 0;
+    min-height: 68px;
+  }
+
+  .student-lab > button,
+  .student-submission > button,
+  .student-task-actions > button {
+    width: 100%;
+  }
+
+  .student-task summary {
+    padding-inline: 16px;
+  }
+
+  .student-task-body {
+    padding-inline: 16px;
+  }
+
+  .student-portal .upload-modal {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 24px);
+    overflow: hidden;
+  }
+
+  .student-portal .upload-modal .modal-head,
+  .student-portal .upload-modal .modal-foot {
+    flex-shrink: 0;
+  }
+
+  .student-portal .upload-modal .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .student-portal .upload-modal .modal-foot .btn-primary {
+    flex: 1;
+  }
+
+  .student-portal .upload-zone > svg,
+  .upload-desktop-copy {
+    display: none;
+  }
+
+  .upload-mobile-copy {
+    display: inline;
+  }
+
+  .student-portal .upload-zone > strong {
+    margin-top: 0;
+  }
+
+  .student-portal .upload-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .student-portal .upload-buttons .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .student-mobile-credit {
+    display: flex;
+    margin-top: 28px;
+  }
+}
+
+@media (min-width: 768px) {
+  .student-rail-footer {
+    display: flex;
+    margin-top: auto;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    padding-top: 20px;
+    padding-bottom: 12px;
+  }
+
+  .student-quordix-credit {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    color: var(--teacher-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    user-select: none;
+    transition: color 240ms ease;
+  }
+
+  .student-quordix-credit .credit-label {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--teacher-muted);
+    text-align: center;
+    transition: color 240ms ease;
+  }
+
+  .student-quordix-credit .quordix-logo-svg {
+    display: block;
+    width: auto;
+    overflow: visible;
+    transition: filter 240ms ease;
+  }
+
+  .student-quordix-credit .quordix-logo-text {
+    fill: var(--teacher-ink);
+    transition: fill 240ms ease;
+  }
+
+  .student-quordix-credit .quordix-bracket-left,
+  .student-quordix-credit .quordix-bracket-right,
+  .student-quordix-credit .quordix-dash {
+    stroke: #f97316;
+    transition: stroke 240ms ease;
+  }
+
+  /* Hover color transition (no shrinking or growing animations) */
+  .student-quordix-credit:hover .credit-label {
+    color: var(--teacher-ink);
+  }
+
+  .student-quordix-credit:hover .quordix-logo-text {
+    fill: #f97316;
+  }
+
+  .student-quordix-credit:hover .quordix-bracket-left,
+  .student-quordix-credit:hover .quordix-bracket-right,
+  .student-quordix-credit:hover .quordix-dash {
+    stroke: #ea580c;
+  }
+
+  .student-quordix-credit:hover .quordix-logo-svg {
+    filter: drop-shadow(0 2px 8px rgba(249, 115, 22, 0.25));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .student-rail-footer {
+    padding-inline: 4px;
+  }
+
+  .student-quordix-credit {
+    gap: 5px;
+    padding: 6px 2px;
+  }
+
+  .student-quordix-credit .credit-label {
+    font-size: 8.5px;
+    letter-spacing: 0.6px;
+  }
+
+  .student-quordix-credit .quordix-logo-svg {
+    height: 15px;
+    max-width: 58px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .student-rail-footer {
+    justify-content: center;
+    padding-top: 28px;
+    padding-bottom: 12px;
+    padding-inline: 0;
+  }
+
+  .student-quordix-credit {
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+  }
+
+  .student-quordix-credit .credit-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .student-quordix-credit .quordix-logo-svg {
+    height: 22px;
+    max-width: 100px;
+  }
+}
+
+
+
+
+

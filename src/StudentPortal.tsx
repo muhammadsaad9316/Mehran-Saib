@@ -18,6 +18,7 @@ import {
 import type { AppState, Lab, Submission } from "../shared/types";
 import { studentProgress } from "./student-progress";
 import BrandLogo from "./BrandLogo";
+import QuordixLogo from "./QuordixLogo";
 
 interface Props {
   state: AppState;
@@ -154,6 +155,18 @@ export default function StudentPortal({
             </button>
           ))}
         </nav>
+        <div className="student-rail-footer">
+          <a
+            href="https://quordix.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="student-quordix-credit"
+            title="Built by Quordix"
+          >
+            <span className="credit-label">Built By</span>
+            <QuordixLogo className="quordix-logo-svg" />
+          </a>
+        </div>
       </aside>
       <div className="teacher-workspace">
         <header className="teacher-header">
@@ -658,6 +671,16 @@ export default function StudentPortal({
             </section>
           )}
           {state.demo && <p className="student-demo-note">Demo workspace <span>·</span> Sample coursework</p>}
+          <a
+            className="quordix-mobile-credit student-mobile-credit"
+            href="https://quordix.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Built by Quordix (opens in a new tab)"
+          >
+            <span>Built by</span>
+            <QuordixLogo />
+          </a>
         </main>
       </div>
     </div>

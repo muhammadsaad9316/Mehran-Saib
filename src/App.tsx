@@ -17,6 +17,7 @@ import { api } from "./api";
 import Review from "./Review";
 import LabEditor from "./LabEditor";
 import BrandLogo from "./BrandLogo";
+import QuordixLogo from "./QuordixLogo";
 const TeacherPortal = lazy(() => import("./TeacherPortal"));
 const StudentPortal = lazy(() => import("./StudentPortal"));
 const date = (
@@ -532,6 +533,16 @@ function Login({
         )}
       </form>
       <div className="login-access-note"><LockKey size={14} aria-hidden="true" /><span>Your class. Your work. One place.</span></div>
+      <a
+        className="quordix-mobile-credit login-mobile-credit"
+        href="https://quordix.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Built by Quordix (opens in a new tab)"
+      >
+        <span>Built by</span>
+        <QuordixLogo />
+      </a>
       </div>
     </main>
   );
@@ -666,7 +677,7 @@ function Upload({
             }}
           >
             <UploadSimple size={32} />
-            <strong>Drop your project here</strong>
+            <strong><span className="upload-desktop-copy">Drop your project here</span><span className="upload-mobile-copy">Add your project files</span></strong>
             <p>HTML, CSS, JavaScript, images or a ZIP · 4 MB total</p>
             <div className="upload-buttons">
               <label className="btn btn-small">

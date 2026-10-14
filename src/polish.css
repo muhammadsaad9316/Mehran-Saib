@@ -243,6 +243,11 @@
 .demo-login .btn small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
 .demo-login .btn > svg { flex-shrink: 0; color: var(--workspace-muted); width: 18px; height: 18px; }
 .login-access-note { display: flex; align-items: center; gap: 8px; color: var(--workspace-muted); font-size: 11.5px; flex-shrink: 0; }
+.quordix-mobile-credit { display: none; }
+.quordix-mobile-credit svg { display: block; width: 76px; height: auto; }
+.quordix-mobile-credit .quordix-logo-text { fill: var(--workspace-ink); }
+.quordix-mobile-credit :is(.quordix-bracket-left, .quordix-bracket-right, .quordix-dash) { stroke: var(--workspace-accent); }
+.quordix-mobile-credit:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: 4px; }
 .loading-screen { min-height: 100dvh; height: auto; padding: 48px 24px; gap: 32px; text-align: center; }
 .loading-brand { display: flex; align-items: center; gap: 12px; font-family: "Manrope Variable", sans-serif; font-size: 26px; font-weight: 750; letter-spacing: -1px; }
 .loading-content { max-width: 480px; }
@@ -382,6 +387,24 @@
   .teacher-minimal .modal .upload-buttons { flex-wrap: wrap; justify-content: center; }
   .teacher-minimal .modal .upload-buttons .btn { min-width: 120px; }
   .loading-content h1 { font-size: 28px; }
+}
+@media (max-width: 767px) {
+  .login-page { height: auto; min-height: 100dvh; max-height: none; overflow: visible; gap: 0; }
+  .login-brand { padding: 18px 20px; gap: 10px; }
+  .login-brand .brand { --brand-size: 23px; }
+  .login-brand-content { flex: initial; }
+  .login-brand .eyebrow { font-size: 9px; }
+  .login-brand h1 { margin: 6px 0; font-size: clamp(28px, 8vw, 36px); }
+  .login-brand h1 br { display: none; }
+  .login-brand p { font-size: 12px; }
+  .login-brand-footer { display: none; }
+  .login-access { justify-content: flex-start; align-items: stretch; max-height: none; overflow: visible; padding: 24px 4px 16px; gap: 14px; }
+  .login-form { max-width: none; }
+  .login-form h2 { font-size: 30px; }
+  .login-form > p { margin-bottom: 16px; }
+  .login-access-note { justify-content: center; }
+  .quordix-mobile-credit { display: flex; align-items: center; justify-content: center; gap: 7px; width: fit-content; min-height: 44px; margin-inline: auto; color: var(--workspace-muted); font-size: 11px; font-weight: 600; text-decoration: none; }
+  .quordix-mobile-credit svg { width: 76px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .loading-progress > span { animation: none; transform: translateX(60%); }
