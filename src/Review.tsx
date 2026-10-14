@@ -73,6 +73,9 @@ export default function Review({
   ]);
   const analysis = analysisResult?.fingerprint === analysisFingerprint ? analysisResult.value : null;
   const highestMatch = analysis?.similarities.find((match) => match.comparable);
+  const highestPeerStudent = highestMatch
+    ? state.students.find((s) => s.id === highestMatch.studentId)
+    : null;
   useEffect(() => {
     if (state.user?.role !== "teacher") return;
     let active = true;
@@ -211,46 +214,6 @@ export default function Review({
 
   const canSave = !busy && isMarksValid;
 
-  const quickScores = useMemo(() => {
-    const max = task.maxMarks || 10;
-    const roundHalf = (val: number) => Math.round(val * 2) / 2;
-    const presets: { label: string; value: number; isFull?: boolean }[] = [
-      { label: `${max} (Full)`, value: max, isFull: true },
-      { label: `${roundHalf(max * 0.85)}`, value: roundHalf(max * 0.85) },
-      { label: `${roundHalf(max * 0.7)}`, value: roundHalf(max * 0.7) },
-      { label: `${roundHalf(max * 0.5)}`, value: roundHalf(max * 0.5) },
-      { label: "0", value: 0 },
-    ];
-    const seen = new Set<number>();
-    return presets.filter((p) => {
-      if (seen.has(p.value)) return false;
-      seen.add(p.value);
-      return true;
-    });
-  }, [task.maxMarks]);
-
-  const feedbackChips = useMemo(() => {
-    const list = [
-      { label: "✨ All requirements met", text: "✨ All requirements met" },
-      { label: "⚠️ Missing required tags", text: "⚠️ Missing required tags" },
-      { label: "🎨 Fix indentation", text: "🎨 Fix indentation" },
-      { label: "🔄 Incomplete · please resubmit", text: "🔄 Incomplete · please resubmit" },
-    ];
-    if (submission.late) {
-      list.push({ label: "⏱ Late submission", text: "⏱ Late submission" });
-    }
-    return list;
-  }, [submission.late]);
-
-  function toggleFeedbackChip(chipText: string) {
-    setFeedback((prev) => {
-      const lines = prev.split("\n").map((l) => l.trim()).filter(Boolean);
-      if (lines.includes(chipText)) {
-        return lines.filter((l) => l !== chipText).join("\n");
-      }
-      return lines.length ? `${lines.join("\n")}\n${chipText}` : chipText;
-    });
-  }
 
   async function grade(advance = false) {
     if (!canSave) return;
@@ -781,60 +744,93 @@ export default function Review({
                 <div className="review-analysis-scroll">
                   {analysis ? (
                     <>
-                      <dl className="review-analysis-facts">
-                        <div><dt>Requirements met</dt><dd className={analysis.total && analysis.met === analysis.total ? "review-status-success" : "review-status-warning"}>{analysis.total ? `${analysis.met} / ${analysis.total}` : "No checks set"}</dd></div>
-                        <div><dt>Quality observations</dt><dd>{analysis.quality.length}</dd></div>
-                        <div><dt>Highest similarity</dt><dd>{highestMatch ? `${highestMatch.percentage}%` : "Not comparable"}</dd></div>
-                      </dl>
+                      <div className="review-analysis-metrics" aria-label="Analysis summary">
+                        <div className={`metric-tile ${analysis.total && analysis.met === analysis.total ? "metric-success" : "metric-warn"}`} title="Requirements fulfilled">
+                          <span className="metric-label">Requirements</span>
+                          <span className="metric-val">{analysis.total ? `${analysis.met} / ${analysis.total}` : "—"}</span>
+                        </div>
+                        <div
+                          className={`metric-tile ${
+                            highestMatch && highestMatch.percentage >= 70
+                              ? "metric-danger"
+                              : highestMatch && highestMatch.percentage >= 50
+                              ? "metric-warn"
+                              : "metric-clean"
+                          }`}
+                          title={highestMatch ? `Highest peer similarity: ${highestMatch.percentage}%` : "No peer match"}
+                        >
+                          <span className="metric-label">Similarity</span>
+                          <span className="metric-val">{highestMatch ? `${highestMatch.percentage}%` : "Clean"}</span>
+                        </div>
+                        <div className={`metric-tile ${analysis.quality.length === 0 ? "metric-clean" : "metric-info"}`} title="Automated code quality observations">
+                          <span className="metric-label">Quality</span>
+                          <span className="metric-val">{analysis.quality.length === 0 ? "0 issues" : `${analysis.quality.length} issue${analysis.quality.length > 1 ? "s" : ""}`}</span>
+                        </div>
+                      </div>
+
                       {analysis.requirements.length > 0 && (
-                        <div className="review-sidebar-checklist" aria-label="Requirements checklist">
-                          {analysis.requirements.map((r) => (
-                            <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
-                              {r.passed ? (
-                                <CheckCircle size={14} weight="fill" className="green" aria-hidden="true" />
-                              ) : (
-                                <WarningCircle size={14} className="amber" aria-hidden="true" />
-                              )}
-                              <span>{r.label}</span>
-                            </div>
-                          ))}
+                        <div className="review-checklist-block">
+                          <div className="review-section-subtitle">Requirements checklist</div>
+                          <div className="review-sidebar-checklist" aria-label="Requirements checklist">
+                            {analysis.requirements.map((r) => (
+                              <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
+                                {r.passed ? (
+                                  <CheckCircle size={15} weight="fill" className="green" aria-hidden="true" />
+                                ) : (
+                                  <WarningCircle size={15} weight="fill" className="amber" aria-hidden="true" />
+                                )}
+                                <span className="req-label">{r.label}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
-                      <button className="review-analysis-link" aria-pressed={tab === "analysis"} onClick={() => setTab("analysis")}>View full analysis <CaretRight size={15} /></button>
+
+                      {analysis.quality.length > 0 && (
+                        <div className="review-sidebar-quality-block">
+                          <div className="review-section-subtitle">Quality observations</div>
+                          <div className="review-sidebar-quality-list">
+                            {analysis.quality.map((q, i) => (
+                              <div key={i} className="review-sidebar-quality-item" title={q.detail}>
+                                <WarningCircle size={13} className="amber" aria-hidden="true" />
+                                <span>{q.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {highestMatch && highestMatch.percentage >= 50 && (
+                        <div className={`review-sidebar-similarity-alert ${highestMatch.percentage >= 70 ? "high" : "moderate"}`}>
+                          <span>
+                            {highestMatch.percentage >= 70 ? "🚨" : "⚠️"} {highestMatch.percentage}% similarity with {highestPeerStudent ? `Roll ${highestPeerStudent.rollNumber}` : "peer"}
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        className="review-analysis-link"
+                        aria-pressed={tab === "analysis"}
+                        onClick={() => setTab("analysis")}
+                      >
+                        <span>View full analysis tab</span> <CaretRight size={14} aria-hidden="true" />
+                      </button>
                     </>
-                  ) : <p className="review-analysis-status" role={analysisError ? "alert" : "status"}>{analysisError || "Checking requirements and comparing code…"}</p>}
+                  ) : (
+                    <p className="review-analysis-status" role={analysisError ? "alert" : "status"}>
+                      {analysisError || "Checking requirements and comparing code…"}
+                    </p>
+                  )}
                 </div>
               </section>
             )}
             <div className={teacher ? "grading-panel review-card review-grade-card" : "review-result"}>
               {state.user?.role === "teacher" ? (
                 <>
-                  <h3 className="review-grade-heading"><ChartBar size={16} aria-hidden="true" />Grade & feedback</h3>
-
-                  <div className="review-quick-scores" aria-label="Quick marks presets">
-                    <span className="review-quick-label">Quick marks:</span>
-                    <div className="review-quick-chips">
-                      {quickScores.map((preset) => {
-                        const isSelected = marks !== "" && Number(marks) === preset.value;
-                        return (
-                          <button
-                            key={preset.value}
-                            type="button"
-                            className={`review-score-chip ${isSelected ? "active" : ""} ${preset.isFull ? "full-score" : ""}`}
-                            onClick={() => {
-                              setMarks(String(preset.value));
-                              if (preset.isFull && !feedback.trim()) {
-                                setFeedback("✨ All requirements met");
-                              }
-                            }}
-                            disabled={busy}
-                            title={`Set marks to ${preset.value}${preset.isFull ? " (auto-suggests positive remark)" : ""}`}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="review-grade-heading">
+                    <ChartBar size={14} aria-hidden="true" />
+                    <span>Grade submission</span>
                   </div>
 
                   <div className="review-grade-controls">
@@ -865,40 +861,18 @@ export default function Review({
                     </label>
                   </div>
 
-                  <div className="review-feedback-section">
-                    <div className="review-feedback-chips-group">
-                      <span className="review-quick-label">Feedback:</span>
-                      <div className="review-feedback-chips" role="group" aria-label="Preset feedback remarks">
-                        {feedbackChips.map((chip) => {
-                          const isApplied = feedback.split("\n").some((line) => line.trim() === chip.text.trim());
-                          return (
-                            <button
-                              key={chip.text}
-                              type="button"
-                              className={`review-chip ${isApplied ? "active" : ""}`}
-                              onClick={() => toggleFeedbackChip(chip.text)}
-                              disabled={busy}
-                              title={isApplied ? `Click to remove "${chip.label}"` : `Click to insert "${chip.label}"`}
-                            >
-                              <span>{chip.label}</span>
-                              {isApplied && <span className="chip-check" aria-hidden="true">✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                  <label className="field review-feedback-field">
+                    <span>Feedback <small className="muted">(optional)</small></span>
+                    <textarea
+                      disabled={busy}
+                      rows={2}
+                      maxLength={4000}
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      placeholder="Remarks (optional)…"
+                    />
+                  </label>
 
-                    <label className="field review-feedback-field">
-                      <textarea
-                        disabled={busy}
-                        rows={teacher ? 2 : 5}
-                        maxLength={4000}
-                        value={feedback}
-                        onChange={(e) => setFeedback(e.target.value)}
-                        placeholder="Share what worked and what to improve…"
-                      />
-                    </label>
-                  </div>
                   <div className="review-remaining-banner">
                     <span className="review-remaining-count">
                       {remainingCount === 0 ? (
@@ -907,7 +881,7 @@ export default function Review({
                         </span>
                       ) : queueMode === "pending" ? (
                         <>
-                          <strong>{remainingCount}</strong> remaining to grade
+                          <span><strong>{remainingCount}</strong> remaining</span>
                           {nextStudent && (
                             <small className="review-next-peek">
                               Next: Roll {nextStudent.rollNumber}
@@ -916,8 +890,7 @@ export default function Review({
                         </>
                       ) : (
                         <>
-                          <strong>{remainingCount}</strong> remaining of{" "}
-                          {totalCount}
+                          <span><strong>{remainingCount}</strong> of {totalCount} remaining</span>
                         </>
                       )}
                     </span>
@@ -937,7 +910,7 @@ export default function Review({
                             : "Save grade (last student in this task)"
                       }
                     >
-                      <ArrowRight size={18} weight="bold" />
+                      <ArrowRight size={17} weight="bold" />
                       {busy ? (
                         "Saving…"
                       ) : nextSubmission ? (
@@ -961,7 +934,7 @@ export default function Review({
                       disabled={!canSave}
                       title="Save grade without moving to the next student"
                     >
-                      <FloppyDisk size={15} />
+                      <FloppyDisk size={14} />
                       {busy ? "Saving…" : "Save grade only"}
                     </button>
                   </div>
