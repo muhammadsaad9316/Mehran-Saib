@@ -211,6 +211,47 @@ export default function Review({
 
   const canSave = !busy && isMarksValid;
 
+  const quickScores = useMemo(() => {
+    const max = task.maxMarks || 10;
+    const roundHalf = (val: number) => Math.round(val * 2) / 2;
+    const presets: { label: string; value: number; isFull?: boolean }[] = [
+      { label: `${max} (Full)`, value: max, isFull: true },
+      { label: `${roundHalf(max * 0.85)}`, value: roundHalf(max * 0.85) },
+      { label: `${roundHalf(max * 0.7)}`, value: roundHalf(max * 0.7) },
+      { label: `${roundHalf(max * 0.5)}`, value: roundHalf(max * 0.5) },
+      { label: "0", value: 0 },
+    ];
+    const seen = new Set<number>();
+    return presets.filter((p) => {
+      if (seen.has(p.value)) return false;
+      seen.add(p.value);
+      return true;
+    });
+  }, [task.maxMarks]);
+
+  const feedbackChips = useMemo(() => {
+    const list = [
+      { label: "✨ All requirements met", text: "✨ All requirements met" },
+      { label: "⚠️ Missing required tags", text: "⚠️ Missing required tags" },
+      { label: "🎨 Fix indentation", text: "🎨 Fix indentation" },
+      { label: "🔄 Incomplete · please resubmit", text: "🔄 Incomplete · please resubmit" },
+    ];
+    if (submission.late) {
+      list.push({ label: "⏱ Late submission", text: "⏱ Late submission" });
+    }
+    return list;
+  }, [submission.late]);
+
+  function toggleFeedbackChip(chipText: string) {
+    setFeedback((prev) => {
+      const lines = prev.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (lines.includes(chipText)) {
+        return lines.filter((l) => l !== chipText).join("\n");
+      }
+      return lines.length ? `${lines.join("\n")}\n${chipText}` : chipText;
+    });
+  }
+
   async function grade(advance = false) {
     if (!canSave) return;
     setError("");
@@ -769,6 +810,33 @@ export default function Review({
               {state.user?.role === "teacher" ? (
                 <>
                   <h3 className="review-grade-heading"><ChartBar size={16} aria-hidden="true" />Grade & feedback</h3>
+
+                  <div className="review-quick-scores" aria-label="Quick marks presets">
+                    <span className="review-quick-label">Quick marks:</span>
+                    <div className="review-quick-chips">
+                      {quickScores.map((preset) => {
+                        const isSelected = marks !== "" && Number(marks) === preset.value;
+                        return (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={`review-score-chip ${isSelected ? "active" : ""} ${preset.isFull ? "full-score" : ""}`}
+                            onClick={() => {
+                              setMarks(String(preset.value));
+                              if (preset.isFull && !feedback.trim()) {
+                                setFeedback("✨ All requirements met");
+                              }
+                            }}
+                            disabled={busy}
+                            title={`Set marks to ${preset.value}${preset.isFull ? " (auto-suggests positive remark)" : ""}`}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="review-grade-controls">
                     <label className="field review-marks-field">
                       <span>Marks</span>
@@ -796,17 +864,41 @@ export default function Review({
                       <span>Publish</span>
                     </label>
                   </div>
-                  <label className="field review-feedback-field">
-                    <span>Feedback</span>
-                    <textarea
-                      disabled={busy}
-                      rows={teacher ? 2 : 5}
-                      maxLength={4000}
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="Share what worked and what to improve…"
-                    />
-                  </label>
+
+                  <div className="review-feedback-section">
+                    <div className="review-feedback-chips-group">
+                      <span className="review-quick-label">Feedback:</span>
+                      <div className="review-feedback-chips" role="group" aria-label="Preset feedback remarks">
+                        {feedbackChips.map((chip) => {
+                          const isApplied = feedback.split("\n").some((line) => line.trim() === chip.text.trim());
+                          return (
+                            <button
+                              key={chip.text}
+                              type="button"
+                              className={`review-chip ${isApplied ? "active" : ""}`}
+                              onClick={() => toggleFeedbackChip(chip.text)}
+                              disabled={busy}
+                              title={isApplied ? `Click to remove "${chip.label}"` : `Click to insert "${chip.label}"`}
+                            >
+                              <span>{chip.label}</span>
+                              {isApplied && <span className="chip-check" aria-hidden="true">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <label className="field review-feedback-field">
+                      <textarea
+                        disabled={busy}
+                        rows={teacher ? 2 : 5}
+                        maxLength={4000}
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        placeholder="Share what worked and what to improve…"
+                      />
+                    </label>
+                  </div>
                   <div className="review-remaining-banner">
                     <span className="review-remaining-count">
                       {remainingCount === 0 ? (

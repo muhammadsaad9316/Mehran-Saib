@@ -1738,23 +1738,205 @@
 .task-check-toolbar select, .comparison-file select, .task-check-filters input { min-height: 44px; min-width: 0; width: 100%; border: 1px solid var(--teacher-edge); border-radius: 8px; padding: 8px 12px; background: var(--teacher-sheet); color: var(--teacher-ink); font-size: 12px; }
 .task-check-refresh { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; background: var(--teacher-control); border: 1px solid var(--teacher-edge); border-radius: 8px; font-size: 12px; }
 .task-check-refresh:disabled { opacity: .6; cursor: wait; }
-.task-check-summary { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 24px; font-size: 12px; color: var(--teacher-muted); }
-.task-check-summary strong { font-family: var(--teacher-mono); font-size: 18px; color: var(--teacher-ink); margin-right: 6px; }
+.task-check-summary {
+  margin-bottom: 20px;
+}
+.task-progress-card {
+  width: 100%;
+  padding: 16px 20px;
+  background: var(--teacher-sheet);
+  border: 1px solid var(--teacher-edge);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.task-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.task-progress-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--teacher-muted);
+}
+.task-progress-separator {
+  color: var(--teacher-edge);
+  font-weight: 700;
+  user-select: none;
+}
+.task-progress-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-progress-stat strong {
+  font-family: var(--teacher-mono);
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--teacher-ink);
+}
+.task-progress-stat.stat-graded {
+  color: #166534;
+}
+.task-progress-stat.stat-graded svg {
+  color: #16a34a;
+}
+.task-progress-stat.stat-graded strong {
+  color: #166534;
+}
+.task-progress-stat.stat-graded .stat-pct {
+  font-weight: 700;
+  color: #15803d;
+}
+.task-progress-stat.stat-pending {
+  color: #92400e;
+}
+.task-progress-stat.stat-pending svg {
+  color: #d97706;
+}
+.task-progress-stat.stat-pending strong {
+  color: #92400e;
+}
+.task-progress-stat.stat-missing {
+  color: var(--teacher-muted);
+}
+.task-progress-stat.stat-flagged strong {
+  color: var(--teacher-focus);
+}
+.task-progress-complete-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #bbf7d0;
+}
+.task-progress-bar-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background: var(--teacher-control);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.task-progress-segment {
+  height: 100%;
+  transition: width 400ms var(--teacher-spring);
+}
+.task-progress-segment.segment-graded {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);
+}
+.task-progress-segment.segment-pending {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
 .task-check-filters { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 12px; }
 .task-check-filters > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .task-check-filters button, .comparison-view-switch button { min-height: 44px; padding: 8px 12px; font-size: 12px; border-radius: 8px; border: 1px solid transparent; color: var(--teacher-muted); }
 .task-check-filters button[aria-pressed="true"], .comparison-view-switch button[aria-pressed="true"] { border-color: var(--teacher-edge); background: var(--teacher-sheet); color: var(--teacher-ink); font-weight: 650; }
-.task-check-filters input { width: 220px; }
+.task-check-search-sort { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.task-sort-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--teacher-muted); }
+.task-sort-label select { min-height: 44px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--teacher-edge); background: var(--teacher-sheet); color: var(--teacher-ink); font-size: 12px; font-weight: 600; cursor: pointer; }
+.task-sort-label select:focus-visible { outline: 2px solid var(--teacher-focus); outline-offset: 2px; }
+.task-check-filters input { width: 200px; }
 .task-check-note { font-size: 12px; color: var(--teacher-muted); line-height: 1.6; margin: 12px 0 16px; }
+
+.task-check-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 44px 24px; border-radius: 12px; gap: 12px; margin: 16px; }
+.task-check-empty-state .empty-celebrate-icon { font-size: 40px; line-height: 1; }
+.task-check-empty-state h3 { font-size: 16px; font-weight: 700; color: var(--teacher-ink); margin: 0; }
+.task-check-empty-state p { font-size: 13px; color: var(--teacher-muted); max-width: 440px; margin: 0; line-height: 1.5; }
+.task-check-empty-state button { margin-top: 6px; padding: 8px 16px; min-height: 38px; font-size: 12px; font-weight: 650; border-radius: 6px; border: 1px solid var(--teacher-edge); background: var(--teacher-sheet); color: var(--teacher-ink); cursor: pointer; transition: all 120ms ease; }
+.task-check-empty-state button:hover { border-color: var(--teacher-focus); color: var(--teacher-action); }
+.task-all-graded-empty { border: 1px dashed #86efac; background: color-mix(in srgb, #dcfce7 45%, var(--teacher-sheet)); }
+.task-all-graded-empty h3 { color: #15803d; }
+
+.task-table-scroll {
+  max-height: clamp(440px, calc(100vh - 280px), 850px);
+  overflow: auto;
+  position: relative;
+  border: 1px solid var(--teacher-edge);
+  border-radius: 12px;
+  background: var(--teacher-sheet);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  scrollbar-gutter: stable;
+}
+.task-table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.task-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.task-table-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--teacher-edge) 80%, transparent);
+  border-radius: 3px;
+}
+.task-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--teacher-muted);
+}
+
 .task-check-table { min-width: 900px; }
 .task-check-table td, .task-check-table th { padding: 14px 12px; }
+.task-check-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--teacher-control) 94%, var(--teacher-sheet));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 2px solid var(--teacher-edge);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.task-check-table th:first-child {
+  border-top-left-radius: 11px;
+}
+.task-check-table th:last-child {
+  border-top-right-radius: 11px;
+}
 .task-check-table tr { transition: background 120ms ease; }
+.task-row-clickable {
+  cursor: pointer;
+}
+.task-row-clickable:hover {
+  background: #f1f5f9 !important;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+.task-row-clickable:focus-visible {
+  outline: 2px solid var(--teacher-focus);
+  outline-offset: -2px;
+}
+.task-row-clickable:hover .task-action-grade {
+  filter: brightness(1.08);
+  transform: translateX(2px);
+  transition: transform 120ms ease;
+}
+.task-row-clickable:hover .task-action-edit {
+  background: var(--teacher-control);
+  border-color: var(--teacher-ink);
+}
 .task-row-pending { background: color-mix(in srgb, #f59e0b 5%, var(--teacher-sheet)); }
 .task-row-pending td:first-child { border-left: 3px solid #d97706; }
 .task-row-graded { background: var(--teacher-sheet); }
 .task-row-graded td:first-child { border-left: 3px solid #16a34a; }
 .task-row-missing { opacity: 0.55; background: var(--teacher-control); }
 .task-row-missing td:first-child { border-left: 3px solid transparent; }
+.task-row-flagged-high { background: color-mix(in srgb, #ef4444 6%, var(--teacher-sheet)) !important; }
+.task-row-flagged-high td:first-child { border-left: 3px solid #dc2626 !important; }
+.task-row-flagged-moderate { background: color-mix(in srgb, #f59e0b 6%, var(--teacher-sheet)) !important; }
+.task-row-flagged-moderate td:first-child { border-left: 3px solid #d97706 !important; }
 .task-row-flagged { background: color-mix(in srgb, var(--teacher-accent) 8%, var(--teacher-sheet)) !important; }
 .task-row-flagged td:first-child { border-left: 3px solid var(--teacher-action) !important; }
 
@@ -1769,11 +1951,14 @@
 
 .task-late { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #b45309; background: #fffbeb; padding: 1px 5px; border-radius: 3px; }
 
-.task-req-badge { font-size: 12px; font-weight: 600; }
-.task-req-badge.req-all-met { color: #15803d; }
-.task-req-badge.req-partial { color: #b45309; }
-.task-quality-clean { font-size: 12px; color: #15803d; font-weight: 600; }
-.task-quality-badge { font-size: 11px; color: var(--teacher-muted); }
+.task-req-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 650; white-space: nowrap; line-height: 1.2; }
+.task-req-badge.req-all-met { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.task-req-badge.req-incomplete { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.task-req-none { font-size: 11px; color: var(--teacher-muted); }
+
+.task-quality-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 650; white-space: nowrap; line-height: 1.2; }
+.task-quality-badge.quality-clean { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.task-quality-badge.quality-issues { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
 
 .task-score-pill { display: inline-flex; align-items: baseline; gap: 2px; padding: 3px 8px; border-radius: 6px; background: var(--teacher-control); border: 1px solid var(--teacher-edge); font-size: 12px; }
 .task-score-pill strong { font-weight: 750; font-size: 13px; color: var(--teacher-ink); }
@@ -1781,7 +1966,10 @@
 .task-score-pending { display: inline-block; font-size: 11px; font-weight: 650; color: #b45309; padding: 2px 7px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 4px; }
 .task-draft-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; background: #fef3c7; color: #92400e; margin-left: 4px; font-weight: 700; text-transform: uppercase; }
 
-.task-match-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; color: var(--teacher-focus); background: color-mix(in srgb, var(--teacher-accent) 10%, var(--teacher-sheet)); font-size: 11px; font-weight: 650; }
+.task-match-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 650; white-space: nowrap; line-height: 1.2; }
+.task-match-badge.match-high { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; font-weight: 700; }
+.task-match-badge.match-moderate { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; font-weight: 700; }
+.task-match-badge.match-clean { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
 
 .task-row-actions { display: flex; gap: 8px; align-items: center; }
 .task-action-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 4px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: background 120ms ease, opacity 120ms ease; }
@@ -1829,9 +2017,13 @@
   .teacher-rail nav button { width: auto; flex: 1; min-width: 44px; }
   .teacher-rail-logo { width: 40px; height: 40px; }
   .task-check-toolbar { grid-template-columns: 1fr; }
+  .task-check-search-sort { width: 100%; }
+  .task-sort-label { width: 100%; }
+  .task-sort-label select { flex: 1; }
   .task-check-filters input { width: 100%; }
   .task-comparison-heading > span { margin-left: 0; }
-  .task-check-summary { gap: 12px; }
+  .task-progress-card { padding: 12px 14px; gap: 10px; }
+  .task-progress-meta { gap: 8px; font-size: 12px; }
 }
 .lab-editor .modal-head,
 .lab-editor .modal-foot { flex-shrink: 0; }

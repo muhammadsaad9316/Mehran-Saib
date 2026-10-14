@@ -63,7 +63,18 @@
 .teacher-minimal .teacher-review-modal .review-status-warning { color: var(--teacher-action); }
 .teacher-minimal .teacher-review-modal .review-sidebar .review-grade-card { border: 1px solid var(--teacher-edge); background: var(--teacher-sheet); flex-shrink: 0; margin-top: auto; padding: 8px 10px; }
 .teacher-minimal .teacher-review-modal .review-grade-card .review-grade-heading { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teacher-muted); }
-.teacher-review-modal .review-grade-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: flex-end; margin-bottom: 6px; }
+.teacher-review-modal .review-quick-scores { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.teacher-review-modal .review-quick-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teacher-muted); }
+.teacher-review-modal .review-quick-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.teacher-review-modal .review-score-chip { display: inline-flex; align-items: center; justify-content: center; padding: 3px 8px; min-height: 25px; font-size: 11px; font-weight: 650; font-family: var(--teacher-mono); border-radius: 5px; border: 1px solid var(--teacher-edge); background: var(--teacher-control); color: var(--teacher-ink); cursor: pointer; transition: all 120ms ease; }
+.teacher-review-modal .review-score-chip:hover:not(:disabled) { border-color: var(--teacher-focus); background: var(--teacher-sheet); color: var(--teacher-action); }
+.teacher-review-modal .review-score-chip.active { background: var(--teacher-ink); color: #fff; border-color: var(--teacher-ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.teacher-review-modal .review-score-chip.full-score { font-weight: 750; }
+.teacher-review-modal .review-score-chip.full-score:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; }
+.teacher-review-modal .review-score-chip.full-score.active { background: #16a34a; border-color: #15803d; color: #fff; box-shadow: 0 1px 3px rgba(22, 163, 74, 0.25); }
+.teacher-review-modal .review-score-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.teacher-review-modal .review-grade-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
 .teacher-review-modal .review-marks-field { gap: 3px; margin-bottom: 0; }
 .teacher-review-modal .review-marks-field > span,
 .teacher-review-modal .review-feedback-field > span { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teacher-muted); }
@@ -72,8 +83,18 @@
 .teacher-minimal .teacher-review-modal .review-grade-card .marks-input > span { font-size: 12px; color: var(--teacher-muted); padding-right: 6px; }
 .teacher-review-modal .review-publish-field { display: flex; align-items: center; gap: 6px; min-height: 34px; margin: 0; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--teacher-ink); cursor: pointer; }
 .teacher-minimal .teacher-review-modal .review-publish-field input { accent-color: var(--teacher-accent); width: 15px; height: 15px; }
-.teacher-review-modal .review-feedback-field { gap: 3px; margin-bottom: 6px; }
-.teacher-review-modal .review-grade-card textarea { resize: vertical; line-height: 1.4; padding: 5px 8px; font-size: 11px; min-height: 36px; max-height: 80px; border-radius: 6px; border: 1px solid var(--teacher-edge); }
+
+.teacher-review-modal .review-feedback-section { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.teacher-review-modal .review-feedback-chips-group { display: flex; flex-direction: column; gap: 4px; }
+.teacher-review-modal .review-feedback-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.teacher-review-modal .review-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; min-height: 23px; font-size: 10.5px; font-weight: 550; border-radius: 5px; border: 1px solid var(--teacher-edge); background: var(--teacher-control); color: var(--teacher-ink); cursor: pointer; transition: all 120ms ease; line-height: 1.2; }
+.teacher-review-modal .review-chip:hover:not(:disabled) { background: var(--teacher-sheet); border-color: var(--teacher-focus); color: var(--teacher-action); }
+.teacher-review-modal .review-chip.active { background: color-mix(in srgb, var(--teacher-accent) 14%, var(--teacher-sheet)); border-color: var(--teacher-accent); color: var(--teacher-ink); font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.teacher-review-modal .review-chip .chip-check { color: var(--teacher-action); font-size: 10px; font-weight: 800; }
+.teacher-review-modal .review-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.teacher-review-modal .review-feedback-field { gap: 3px; margin-bottom: 0; }
+.teacher-review-modal .review-grade-card textarea { resize: vertical; line-height: 1.4; padding: 5px 8px; font-size: 11px; min-height: 34px; max-height: 80px; border-radius: 6px; border: 1px solid var(--teacher-edge); }
 .teacher-review-modal .review-queue-nav-group { display: flex; align-items: center; gap: 10px; padding-right: 14px; border-right: 1px solid var(--teacher-edge); }
 .teacher-review-modal .review-queue-mode-toggle { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--teacher-edge); border-radius: 6px; background: var(--teacher-control); }
 .teacher-review-modal .review-mode-btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--teacher-muted); font-size: 11px; font-weight: 600; cursor: pointer; transition: background 120ms ease, color 120ms ease; white-space: nowrap; }
