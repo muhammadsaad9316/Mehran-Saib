@@ -746,8 +746,8 @@ export default function Review({
                     <>
                       <div className="review-analysis-metrics" aria-label="Analysis summary">
                         <div className={`metric-tile ${analysis.total && analysis.met === analysis.total ? "metric-success" : "metric-warn"}`} title="Requirements fulfilled">
-                          <span className="metric-label">Requirements</span>
                           <span className="metric-val">{analysis.total ? `${analysis.met} / ${analysis.total}` : "—"}</span>
+                          <span className="metric-label">Requirements</span>
                         </div>
                         <div
                           className={`metric-tile ${
@@ -759,12 +759,12 @@ export default function Review({
                           }`}
                           title={highestMatch ? `Highest peer similarity: ${highestMatch.percentage}%` : "No peer match"}
                         >
-                          <span className="metric-label">Similarity</span>
                           <span className="metric-val">{highestMatch ? `${highestMatch.percentage}%` : "Clean"}</span>
+                          <span className="metric-label">Similarity</span>
                         </div>
                         <div className={`metric-tile ${analysis.quality.length === 0 ? "metric-clean" : "metric-info"}`} title="Automated code quality observations">
-                          <span className="metric-label">Quality</span>
                           <span className="metric-val">{analysis.quality.length === 0 ? "0 issues" : `${analysis.quality.length} issue${analysis.quality.length > 1 ? "s" : ""}`}</span>
+                          <span className="metric-label">Quality</span>
                         </div>
                       </div>
 
@@ -828,10 +828,6 @@ export default function Review({
             <div className={teacher ? "grading-panel review-card review-grade-card" : "review-result"}>
               {state.user?.role === "teacher" ? (
                 <>
-                  <div className="review-grade-heading">
-                    <ChartBar size={14} aria-hidden="true" />
-                    <span>Grade submission</span>
-                  </div>
 
                   <div className="review-grade-controls">
                     <label className="field review-marks-field">

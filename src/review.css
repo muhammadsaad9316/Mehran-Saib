@@ -47,15 +47,19 @@
 .teacher-review-modal .review-analysis-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 10px 12px; }
 .teacher-review-modal .review-analysis-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-right: 3px; display: flex; flex-direction: column; gap: 10px; }
 
-.teacher-review-modal .review-analysis-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.teacher-review-modal .metric-tile { display: flex; flex-direction: column; gap: 2px; padding: 6px 7px; border-radius: 6px; border: 1px solid var(--teacher-edge); background: var(--teacher-control); }
-.teacher-review-modal .metric-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--teacher-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.teacher-review-modal .metric-val { font-size: 13px; font-weight: 750; font-family: var(--teacher-mono); line-height: 1.2; }
-.teacher-review-modal .metric-success .metric-val { color: #15803d; }
-.teacher-review-modal .metric-warn .metric-val { color: #b45309; }
-.teacher-review-modal .metric-danger .metric-val { color: #dc2626; }
-.teacher-review-modal .metric-clean .metric-val { color: #15803d; }
-.teacher-review-modal .metric-info .metric-val { color: var(--teacher-action); }
+.teacher-review-modal .review-analysis-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 2px; }
+.teacher-review-modal .metric-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 3px; padding: 8px 4px; border-radius: 7px; border: 1px solid var(--teacher-edge); background: var(--teacher-control); min-width: 0; }
+.teacher-review-modal .metric-val { font-size: 13.5px; font-weight: 800; font-family: var(--teacher-mono); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.teacher-review-modal .metric-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teacher-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.teacher-review-modal .metric-tile.metric-success { border-color: #bbf7d0; background: #f0fdf4; }
+.teacher-review-modal .metric-tile.metric-success .metric-val { color: #15803d; }
+.teacher-review-modal .metric-tile.metric-clean { border-color: var(--teacher-edge); background: var(--teacher-control); }
+.teacher-review-modal .metric-tile.metric-clean .metric-val { color: #15803d; }
+.teacher-review-modal .metric-tile.metric-warn { border-color: #fde68a; background: #fffbeb; }
+.teacher-review-modal .metric-tile.metric-warn .metric-val { color: #b45309; }
+.teacher-review-modal .metric-tile.metric-danger { border-color: #fecaca; background: #fef2f2; }
+.teacher-review-modal .metric-tile.metric-danger .metric-val { color: #dc2626; }
+.teacher-review-modal .metric-tile.metric-info .metric-val { color: var(--teacher-action); }
 
 .teacher-review-modal .review-section-subtitle { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teacher-muted); margin-bottom: 5px; }
 .teacher-review-modal .review-sidebar-checklist { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
@@ -135,7 +139,7 @@
   .teacher-minimal .teacher-review-modal .tabs { gap: 24px; padding-inline: 20px; }
   .teacher-minimal .review-overlay { padding: 0; }
   .teacher-minimal .teacher-review-modal { padding: 0; height: 100dvh; max-height: 100dvh; overflow: hidden; }
-  .teacher-review-modal .review-layout { grid-template-columns: minmax(0, 1fr) 280px; height: 100%; }
+  .teacher-review-modal .review-layout { grid-template-columns: minmax(0, 1fr) 290px; height: 100%; }
   .teacher-review-modal .review-sidebar { height: 100%; overflow: hidden; }
   .teacher-review-modal .review-desktop-close { display: inline-grid; }
   .teacher-review-modal .review-mobile-close { display: none; }
