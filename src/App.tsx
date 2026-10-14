@@ -269,6 +269,7 @@ export default function App() {
           }
           state={state}
           onClose={() => setReview(null)}
+          onNavigate={(next) => setReview(next)}
           onSaved={async (message) => {
             await refresh();
             if (message) setToast(message);

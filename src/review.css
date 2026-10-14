@@ -33,12 +33,19 @@
 .teacher-review-modal .preview-note svg { flex-shrink: 0; margin-top: 1px; }
 .teacher-review-modal .review-workspace > .error { margin: 0 12px 12px; }
 .teacher-review-modal .review-sidebar { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-width: 0; height: 100%; overflow: hidden; }
-.teacher-review-modal .review-card { padding: 10px; border: 1px solid var(--teacher-edge); border-radius: 8px; background: var(--teacher-sheet); }
-.teacher-review-modal .review-card-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.teacher-review-modal .review-card-topline .icon-btn { margin: -10px -10px -10px 0; }
+.teacher-review-modal *::-webkit-scrollbar { width: 5px; height: 5px; }
+.teacher-review-modal *::-webkit-scrollbar-track { background: transparent; }
+.teacher-review-modal *::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 999px; }
+.teacher-review-modal *::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+.teacher-review-modal *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.teacher-review-modal .review-card { padding: 10px; border: 1px solid var(--teacher-edge); border-radius: 8px; background: var(--teacher-sheet); overflow: hidden; }
+.teacher-review-modal .review-card-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-shrink: 0; }
+.teacher-review-modal .review-card-topline .icon-btn { margin: 0; width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 5px; color: var(--teacher-muted); transition: background 120ms ease, color 120ms ease; }
+.teacher-review-modal .review-card-topline .icon-btn:hover { background: var(--teacher-control); color: var(--teacher-ink); }
 .teacher-minimal .teacher-review-modal .review-card .eyebrow,
 .teacher-review-modal .review-card-label { display: flex; align-items: center; gap: 8px; color: var(--teacher-muted); font-size: 10px; font-weight: 600; letter-spacing: 1px; }
-.teacher-review-modal .review-analysis-card { flex: 1 1 auto; min-height: 70px; overflow-y: auto; scrollbar-width: thin; }
+.teacher-review-modal .review-analysis-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 70px; overflow: hidden; }
+.teacher-review-modal .review-analysis-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-right: 2px; }
 .teacher-review-modal .review-analysis-facts { margin: 4px 0 0; }
 .teacher-review-modal .review-analysis-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; border-top: 1px solid var(--teacher-paper); font-size: 12px; }
 .teacher-review-modal .review-analysis-facts dt { color: var(--teacher-muted); }
@@ -67,6 +74,32 @@
 .teacher-minimal .teacher-review-modal .review-publish-field input { accent-color: var(--teacher-accent); width: 15px; height: 15px; }
 .teacher-review-modal .review-feedback-field { gap: 3px; margin-bottom: 6px; }
 .teacher-review-modal .review-grade-card textarea { resize: vertical; line-height: 1.4; padding: 5px 8px; font-size: 11px; min-height: 36px; max-height: 80px; border-radius: 6px; border: 1px solid var(--teacher-edge); }
+.teacher-review-modal .review-queue-nav-group { display: flex; align-items: center; gap: 10px; padding-right: 14px; border-right: 1px solid var(--teacher-edge); }
+.teacher-review-modal .review-queue-mode-toggle { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--teacher-edge); border-radius: 6px; background: var(--teacher-control); }
+.teacher-review-modal .review-mode-btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--teacher-muted); font-size: 11px; font-weight: 600; cursor: pointer; transition: background 120ms ease, color 120ms ease; white-space: nowrap; }
+.teacher-review-modal .review-mode-btn.active { background: var(--teacher-sheet); color: var(--teacher-ink); box-shadow: 0 1px 2px rgba(0,0,0,0.06); font-weight: 700; }
+.teacher-review-modal .review-mode-dot { width: 6px; height: 6px; border-radius: 50%; }
+.teacher-review-modal .review-mode-dot.has-pending { background: #d97706; }
+.teacher-review-modal .review-mode-dot.all-done { background: #16a34a; }
+.teacher-review-modal .review-queue-pill { display: flex; align-items: center; gap: 8px; }
+.teacher-review-modal .review-queue-arrow { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--teacher-edge); border-radius: 5px; background: var(--teacher-sheet); color: var(--teacher-ink); cursor: pointer; transition: background 120ms ease; }
+.teacher-review-modal .review-queue-arrow:hover:not(:disabled) { background: var(--teacher-control); }
+.teacher-review-modal .review-queue-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+.teacher-review-modal .review-queue-label { font-size: 11px; color: var(--teacher-muted); white-space: nowrap; }
+.teacher-review-modal .review-queue-label strong { color: var(--teacher-ink); font-weight: 700; }
+.teacher-minimal .teacher-review-modal .review-remaining-banner { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; margin-bottom: 6px; border: 1px solid var(--teacher-edge); border-radius: 6px; background: var(--teacher-control); font-size: 11px; }
+.teacher-minimal .teacher-review-modal .review-remaining-count { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 6px; color: var(--teacher-ink); font-weight: 600; }
+.teacher-minimal .teacher-review-modal .review-remaining-count strong { color: var(--teacher-action); font-weight: 750; }
+.teacher-minimal .teacher-review-modal .review-next-peek { font-size: 10px; color: var(--teacher-muted); padding: 1px 6px; border-radius: 4px; background: var(--teacher-sheet); border: 1px solid var(--teacher-edge); font-weight: 600; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-next-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; font-size: 13px; font-weight: 750; background: var(--workspace-accent, #0f766e); color: #fff; border: 1px solid var(--workspace-accent, #0f766e); border-radius: 7px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: opacity 120ms ease, transform 120ms ease; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-next-btn:hover:not(:disabled) { opacity: 0.92; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-next-btn:active:not(:disabled) { transform: scale(0.99); }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-next-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-next-btn .kbd-hint { font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.22); margin-left: 3px; letter-spacing: 0.4px; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-only-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; font-size: 11px; font-weight: 600; background: transparent; color: var(--teacher-muted); border: 1px solid var(--teacher-edge); border-radius: 6px; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-only-btn:hover:not(:disabled) { background: var(--teacher-control); color: var(--teacher-ink); }
+.teacher-minimal .teacher-review-modal .review-grade-card .review-save-only-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .teacher-minimal .teacher-review-modal .review-grade-card .review-save-btn { min-height: 38px; font-size: 13px; font-weight: 700; margin-top: 2px; }
 .teacher-minimal .teacher-review-modal .review-grade-card .small-text { margin: 4px 0 0; font-size: 10px; line-height: 1.3; color: var(--teacher-muted); }
 .teacher-review-modal .review-grade-card :is(.error, .success) { margin-top: 8px; overflow-wrap: anywhere; font-size: 11px; }

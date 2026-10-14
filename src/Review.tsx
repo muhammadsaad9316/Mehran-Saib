@@ -11,11 +11,14 @@ import {
   FloppyDisk,
   DownloadSimple,
   CaretRight,
+  CaretLeft,
+  ArrowRight,
   Clock,
   Globe,
   ChartBar,
 } from "@phosphor-icons/react";
 import type { AppState, AnalysisResult, Submission } from "../shared/types";
+import { byRollNumber } from "../shared/roster";
 import { api, saveFile } from "./api";
 import { buildPreview, resolvePath } from "./preview";
 import { useSubmissionAssets } from "./submission-assets";
@@ -25,11 +28,13 @@ export default function Review({
   state,
   onClose,
   onSaved,
+  onNavigate,
 }: {
   submission: Submission;
   state: AppState;
   onClose: () => void;
   onSaved: (message?: string) => Promise<void>;
+  onNavigate?: (submission: Submission) => void;
 }) {
   const lab = state.labs.find((l) => l.id === submission.labId)!;
   const task = lab.tasks.find((t) => t.id === submission.taskId)!;
@@ -114,7 +119,100 @@ export default function Review({
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [entry, submission.files]);
-  async function grade() {
+
+  const allTaskSubmissions = useMemo(() => {
+    const studentMap = new Map(state.students.map((s) => [s.id, s]));
+    return state.submissions
+      .filter(
+        (s) => s.labId === submission.labId && s.taskId === submission.taskId,
+      )
+      .sort((a, b) => {
+        const studentA = studentMap.get(a.studentId);
+        const studentB = studentMap.get(b.studentId);
+        if (studentA && studentB) return byRollNumber(studentA, studentB);
+        return 0;
+      });
+  }, [state.submissions, state.students, submission.labId, submission.taskId]);
+
+  const pendingSubmissions = useMemo(
+    () => allTaskSubmissions.filter((s) => !s.grade),
+    [allTaskSubmissions],
+  );
+
+  const remainingCount = pendingSubmissions.length;
+  const totalCount = allTaskSubmissions.length;
+  const gradedCount = totalCount - remainingCount;
+
+  // Default to pending mode if there are pending submissions
+  const [queueMode, setQueueMode] = useState<"pending" | "all">(() =>
+    remainingCount > 0 ? "pending" : "all",
+  );
+
+  const activeQueue = useMemo(() => {
+    if (queueMode === "all") return allTaskSubmissions;
+    return allTaskSubmissions.filter(
+      (s) => !s.grade || s.id === submission.id,
+    );
+  }, [allTaskSubmissions, queueMode, submission.id]);
+
+  const currentQueueIndex = activeQueue.findIndex((s) => s.id === submission.id);
+  const currentPosition = currentQueueIndex >= 0 ? currentQueueIndex + 1 : 1;
+
+  const nextSubmission = useMemo(() => {
+    const currentAllIndex = allTaskSubmissions.findIndex(
+      (s) => s.id === submission.id,
+    );
+    if (queueMode === "pending") {
+      if (currentAllIndex >= 0) {
+        // Next ungraded after current
+        const after = allTaskSubmissions
+          .slice(currentAllIndex + 1)
+          .find((s) => !s.grade && s.id !== submission.id);
+        if (after) return after;
+        // Wrap around if teacher started grading in the middle
+        const before = allTaskSubmissions
+          .slice(0, currentAllIndex)
+          .find((s) => !s.grade && s.id !== submission.id);
+        if (before) return before;
+      }
+      return null;
+    }
+    return currentAllIndex >= 0 && currentAllIndex < allTaskSubmissions.length - 1
+      ? allTaskSubmissions[currentAllIndex + 1]
+      : null;
+  }, [allTaskSubmissions, queueMode, submission.id]);
+
+  const prevSubmission = useMemo(() => {
+    const currentAllIndex = allTaskSubmissions.findIndex(
+      (s) => s.id === submission.id,
+    );
+    if (queueMode === "pending") {
+      if (currentAllIndex > 0) {
+        const before = allTaskSubmissions
+          .slice(0, currentAllIndex)
+          .reverse()
+          .find((s) => !s.grade && s.id !== submission.id);
+        if (before) return before;
+      }
+      return null;
+    }
+    return currentAllIndex > 0 ? allTaskSubmissions[currentAllIndex - 1] : null;
+  }, [allTaskSubmissions, queueMode, submission.id]);
+
+  const nextStudent = nextSubmission
+    ? state.students.find((s) => s.id === nextSubmission.studentId)
+    : null;
+
+  const isMarksValid =
+    marks !== "" &&
+    Number.isFinite(Number(marks)) &&
+    Number(marks) >= 0 &&
+    Number(marks) <= task.maxMarks;
+
+  const canSave = !busy && isMarksValid;
+
+  async function grade(advance = false) {
+    if (!canSave) return;
     setError("");
     setNotice("");
     setBusy(true);
@@ -128,13 +226,38 @@ export default function Review({
           revision: submission.revision,
         }),
       });
-      setNotice(
-        publish ? "Grade published to the student." : "Grade saved as a draft.",
-      );
+
+      const nextTarget = advance ? nextSubmission : null;
+      const statusText = publish ? "Grade published" : "Draft saved";
+      const rollText = student.rollNumber ? `Roll ${student.rollNumber}` : (student.name || "student");
+      const wasLastPending = queueMode === "pending" && !nextTarget;
+
       try {
-        await onSaved();
+        await onSaved(
+          nextTarget
+            ? `${statusText} for ${rollText}. Loading next remaining student…`
+            : wasLastPending
+              ? `🎉 All submissions for ${task.title} have been graded!`
+              : (publish ? "Grade published to the student." : "Grade saved as a draft.")
+        );
       } catch (cause) {
         setError(`The grade was saved, but the workspace could not refresh. ${cause instanceof Error ? cause.message : "Refresh before grading again."}`);
+      }
+
+      if (advance) {
+        if (nextTarget && onNavigate) {
+          onNavigate(nextTarget);
+        } else {
+          setNotice(
+            queueMode === "pending"
+              ? `🎉 All submissions for ${task.title} are now graded! (${totalCount}/${totalCount} complete)`
+              : "Grade saved! You have reached the last student submission for this task."
+          );
+        }
+      } else {
+        setNotice(
+          publish ? "Grade published to the student." : "Grade saved as a draft.",
+        );
       }
     } catch (e) {
       if ((e as Error & { status?: number }).status === 409) {
@@ -153,6 +276,20 @@ export default function Review({
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!teacher) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (canSave) {
+          e.preventDefault();
+          grade(Boolean(nextSubmission));
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [teacher, canSave, nextSubmission, marks, feedback, publish]);
   const reviewHeader = (
     <header className="modal-head">
       <div className="review-head-main">
@@ -187,9 +324,103 @@ export default function Review({
       </div>
       {teacher && (
         <div className="review-top-facts" aria-label="Submission summary">
+          {allTaskSubmissions.length > 1 && (
+            <div className="review-queue-nav-group">
+              <div
+                className="review-queue-mode-toggle"
+                role="group"
+                aria-label="Queue filter mode"
+              >
+                <button
+                  type="button"
+                  className={`review-mode-btn ${queueMode === "pending" ? "active" : ""}`}
+                  onClick={() => setQueueMode("pending")}
+                  title="Skip checked students and only view remaining unchecked work"
+                >
+                  <span
+                    className={`review-mode-dot ${remainingCount > 0 ? "has-pending" : "all-done"}`}
+                  />
+                  <span>
+                    <strong>{remainingCount}</strong> remaining
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`review-mode-btn ${queueMode === "all" ? "active" : ""}`}
+                  onClick={() => setQueueMode("all")}
+                  title="View all submissions in roll order"
+                >
+                  <span>All ({totalCount})</span>
+                </button>
+              </div>
+
+              <div className="review-queue-pill">
+                <button
+                  type="button"
+                  className="review-queue-arrow"
+                  disabled={!prevSubmission || busy}
+                  onClick={() => prevSubmission && onNavigate?.(prevSubmission)}
+                  title={
+                    prevSubmission
+                      ? `Previous ${queueMode === "pending" ? "remaining" : "student"}: Roll ${state.students.find((s) => s.id === prevSubmission.studentId)?.rollNumber || ""}`
+                      : "First in queue"
+                  }
+                  aria-label="Previous student"
+                >
+                  <CaretLeft size={14} weight="bold" />
+                </button>
+                <span className="review-queue-label">
+                  {queueMode === "pending" ? (
+                    <>
+                      Remaining <strong>{currentPosition}</strong> of{" "}
+                      <strong>{activeQueue.length}</strong>
+                    </>
+                  ) : (
+                    <>
+                      Student <strong>{currentPosition}</strong> of{" "}
+                      <strong>{activeQueue.length}</strong>
+                    </>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="review-queue-arrow"
+                  disabled={!nextSubmission || busy}
+                  onClick={() => nextSubmission && onNavigate?.(nextSubmission)}
+                  title={
+                    nextSubmission
+                      ? `Next ${queueMode === "pending" ? "remaining" : "student"}: Roll ${nextStudent?.rollNumber || ""}`
+                      : "Last in queue"
+                  }
+                  aria-label="Next student"
+                >
+                  <CaretRight size={14} weight="bold" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="review-top-fact"
+            title={`${gradedCount} of ${totalCount} submissions graded`}
+          >
+            <span className="fact-label">Graded</span>
+            <strong>
+              {gradedCount} / {totalCount}
+            </strong>
+          </div>
+
           <div className="review-top-fact">
-            <span className="fact-label"><Clock size={13} aria-hidden="true" /> Submitted</span>
-            <strong className={submission.late ? "review-status-warning" : "review-status-success"}>
+            <span className="fact-label">
+              <Clock size={13} aria-hidden="true" /> Submitted
+            </span>
+            <strong
+              className={
+                submission.late
+                  ? "review-status-warning"
+                  : "review-status-success"
+              }
+            >
               {submission.late ? "Late" : "On time"}
             </strong>
           </div>
@@ -504,32 +735,34 @@ export default function Review({
               <section className="review-card review-analysis-card" aria-label="Code analysis">
                 <div className="review-card-topline">
                   <div className="eyebrow"><Code size={15} aria-hidden="true" /> CODE ANALYSIS</div>
-                  <button className="icon-btn review-desktop-close" aria-label="Close review" onClick={onClose}><X size={19} /></button>
+                  <button className="icon-btn review-desktop-close" aria-label="Close review" onClick={onClose}><X size={17} /></button>
                 </div>
-                {analysis ? (
-                  <>
-                    <dl className="review-analysis-facts">
-                      <div><dt>Requirements met</dt><dd className={analysis.total && analysis.met === analysis.total ? "review-status-success" : "review-status-warning"}>{analysis.total ? `${analysis.met} / ${analysis.total}` : "No checks set"}</dd></div>
-                      <div><dt>Quality observations</dt><dd>{analysis.quality.length}</dd></div>
-                      <div><dt>Highest similarity</dt><dd>{highestMatch ? `${highestMatch.percentage}%` : "Not comparable"}</dd></div>
-                    </dl>
-                    {analysis.requirements.length > 0 && (
-                      <div className="review-sidebar-checklist" aria-label="Requirements checklist">
-                        {analysis.requirements.map((r) => (
-                          <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
-                            {r.passed ? (
-                              <CheckCircle size={14} weight="fill" className="green" aria-hidden="true" />
-                            ) : (
-                              <WarningCircle size={14} className="amber" aria-hidden="true" />
-                            )}
-                            <span>{r.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button className="review-analysis-link" aria-pressed={tab === "analysis"} onClick={() => setTab("analysis")}>View full analysis <CaretRight size={15} /></button>
-                  </>
-                ) : <p className="review-analysis-status" role={analysisError ? "alert" : "status"}>{analysisError || "Checking requirements and comparing code…"}</p>}
+                <div className="review-analysis-scroll">
+                  {analysis ? (
+                    <>
+                      <dl className="review-analysis-facts">
+                        <div><dt>Requirements met</dt><dd className={analysis.total && analysis.met === analysis.total ? "review-status-success" : "review-status-warning"}>{analysis.total ? `${analysis.met} / ${analysis.total}` : "No checks set"}</dd></div>
+                        <div><dt>Quality observations</dt><dd>{analysis.quality.length}</dd></div>
+                        <div><dt>Highest similarity</dt><dd>{highestMatch ? `${highestMatch.percentage}%` : "Not comparable"}</dd></div>
+                      </dl>
+                      {analysis.requirements.length > 0 && (
+                        <div className="review-sidebar-checklist" aria-label="Requirements checklist">
+                          {analysis.requirements.map((r) => (
+                            <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
+                              {r.passed ? (
+                                <CheckCircle size={14} weight="fill" className="green" aria-hidden="true" />
+                              ) : (
+                                <WarningCircle size={14} className="amber" aria-hidden="true" />
+                              )}
+                              <span>{r.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button className="review-analysis-link" aria-pressed={tab === "analysis"} onClick={() => setTab("analysis")}>View full analysis <CaretRight size={15} /></button>
+                    </>
+                  ) : <p className="review-analysis-status" role={analysisError ? "alert" : "status"}>{analysisError || "Checking requirements and comparing code…"}</p>}
+                </div>
               </section>
             )}
             <div className={teacher ? "grading-panel review-card review-grade-card" : "review-result"}>
@@ -574,23 +807,72 @@ export default function Review({
                       placeholder="Share what worked and what to improve…"
                     />
                   </label>
-                  <button
-                    className="btn btn-primary full review-save-btn"
-                    onClick={grade}
-                    disabled={
-                      busy ||
-                      marks === "" ||
-                      !Number.isFinite(Number(marks)) ||
-                      Number(marks) < 0 ||
-                      Number(marks) > task.maxMarks
-                    }
-                  >
-                    <FloppyDisk size={18} />
-                    {busy ? "Saving…" : "Save grade"}
-                  </button>
-                  <p className="muted small-text">
-                    Analysis is advisory. You assign the grade.
-                  </p>
+                  <div className="review-remaining-banner">
+                    <span className="review-remaining-count">
+                      {remainingCount === 0 ? (
+                        <span className="review-status-success">
+                          🎉 All submissions graded
+                        </span>
+                      ) : queueMode === "pending" ? (
+                        <>
+                          <strong>{remainingCount}</strong> remaining to grade
+                          {nextStudent && (
+                            <small className="review-next-peek">
+                              Next: Roll {nextStudent.rollNumber}
+                            </small>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <strong>{remainingCount}</strong> remaining of{" "}
+                          {totalCount}
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="review-save-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary full review-save-next-btn"
+                      onClick={() => grade(true)}
+                      disabled={!canSave}
+                      title={
+                        nextSubmission
+                          ? `Save and skip to next remaining student (Roll ${nextStudent?.rollNumber || ""}) [Ctrl+Enter]`
+                          : queueMode === "pending"
+                            ? "Save grade for the final remaining student"
+                            : "Save grade (last student in this task)"
+                      }
+                    >
+                      <ArrowRight size={18} weight="bold" />
+                      {busy ? (
+                        "Saving…"
+                      ) : nextSubmission ? (
+                        <>
+                          Save & Next{" "}
+                          {nextStudent ? `(Roll ${nextStudent.rollNumber})` : ""}
+                          <span className="kbd-hint">Ctrl ↵</span>
+                        </>
+                      ) : queueMode === "pending" ? (
+                        <>
+                          Save & Complete <span className="kbd-hint">Ctrl ↵</span>
+                        </>
+                      ) : (
+                        "Save (Last student)"
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn full review-save-only-btn"
+                      onClick={() => grade(false)}
+                      disabled={!canSave}
+                      title="Save grade without moving to the next student"
+                    >
+                      <FloppyDisk size={15} />
+                      {busy ? "Saving…" : "Save grade only"}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <>
