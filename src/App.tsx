@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Plus,
   ArrowUpRight,
@@ -16,9 +16,9 @@ import type { AppState, Lab, Submission, User } from "../shared/types";
 import { api } from "./api";
 import Review from "./Review";
 import LabEditor from "./LabEditor";
-import TeacherPortal from "./TeacherPortal";
-import StudentPortal from "./StudentPortal";
 import BrandLogo from "./BrandLogo";
+const TeacherPortal = lazy(() => import("./TeacherPortal"));
+const StudentPortal = lazy(() => import("./StudentPortal"));
 const date = (
   value: string,
   options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" },
@@ -227,6 +227,7 @@ export default function App() {
     <div
       className={`app-shell teacher-minimal${teacher ? "" : " student-portal"}`}
     >
+      <Suspense fallback={<main className="loading-screen" role="status"><BrandLogo /><p>Opening your workspace…</p></main>}>
       {teacher ? (
         <TeacherPortal
           state={state}
@@ -255,6 +256,7 @@ export default function App() {
           onDismissError={() => setError("")}
         />
       )}
+      </Suspense>
       {review && (
         <Review
           key={

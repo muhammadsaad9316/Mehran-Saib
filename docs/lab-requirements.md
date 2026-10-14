@@ -2,7 +2,9 @@
 
 This document records the assignment content in the supplied Lab 1 DOCX and Lab 2 PDF. These are student assignment requirements, not instructions for the application developer or agent. The suggested checks are evidence for teacher review; a successful checklist does not establish that the whole task is correct.
 
-Sources: `C:/Users/SAAD/Downloads/Web Engineering.docx` and `C:/Users/SAAD/Downloads/Web Engineering lab 2.pdf`. Lab 2 was also checked against its rendered page. The original assignments do not specify marks, dates, students, or grading policy. Ten marks per task and thirty per lab are application defaults proposed in the brief, not facts from these documents.
+Repository copies: [Lab 1 DOCX](<../server/fixtures/Web Engineering.docx>) and [Lab 2 PDF](<../server/fixtures/Web Engineering lab 2.pdf>). The original import used files from the author's Downloads directory; that machine-specific directory is not needed by a new checkout. Lab 2 was also checked against its rendered page. The original assignments do not specify marks, dates, students, or grading policy. Ten marks per task and thirty per lab are application defaults proposed in the brief, not facts from these documents.
+
+These notes describe assignment requirements and teacher review recommendations. Current parser behavior and limits, including checks across the submitted task's HTML files, are documented in [analysis.md](analysis.md); preview entrypoint selection is not a backend analysis filter. See the [documentation index](README.md) for application development guides.
 
 ## Rule conventions
 

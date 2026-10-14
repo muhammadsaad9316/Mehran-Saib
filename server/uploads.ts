@@ -102,13 +102,12 @@ export function parseUploads(
     if (upload.buffer.length > MAX_UPLOAD_BYTES)
       throw new HttpError(413, "Upload exceeds 4 MB.");
     if (upload.originalname.toLowerCase().endsWith(".zip")) {
-      let archive: AdmZip;
+      let entries: AdmZip.IZipEntry[];
       try {
-        archive = new AdmZip(upload.buffer);
+        entries = new AdmZip(upload.buffer).getEntries();
       } catch {
         throw new HttpError(400, "Could not read this ZIP file.");
       }
-      const entries = archive.getEntries();
       if (entries.length > MAX_FILES + 20)
         throw new HttpError(413, "ZIP contains too many entries.");
       for (const entry of entries) {

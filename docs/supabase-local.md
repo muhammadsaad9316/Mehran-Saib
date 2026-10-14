@@ -1,43 +1,51 @@
-# Local LabTrack with Supabase
+# Local application with hosted Supabase
 
-The application runs at `http://127.0.0.1:5173`; its Node API runs on localhost port 3001. The private database is the existing [LabTrack Supabase project](https://supabase.com/dashboard/project/akudfcgksdjlipxxwfdu). The public site is https://labtrack-lilac.vercel.app; this guide covers local development.
+This guide connects the local React/Express app to the existing [LabTrack project](https://supabase.com/dashboard/project/akudfcgksdjlipxxwfdu). The frontend runs at [http://127.0.0.1:5173](http://127.0.0.1:5173) and proxies `/api` to Node on 3001. The database is hosted; this is not a local Docker Supabase setup.
 
-## Database setup completed
+For an isolated demo or a new database, use [getting started](getting-started.md). For schema, functions and history, use [Supabase](supabase.md).
 
-The `labtrack_private_persistence` migration has been applied to the hosted project. In Supabase's Table Editor, choose the `public` schema:
+## Connect a checkout
 
-- `labtrack_records` stores users, labs, submissions, activity and sessions. The `collection` column identifies the record type; `document` contains its private data.
-- `labtrack_meta` stores the current revision.
-- `labtrack_read` and `labtrack_write` read records and save changed records in an atomic transaction. Stale writes are rejected instead of overwriting someone else's change.
-
-Both tables have RLS enabled. Anonymous and Supabase-authenticated browser roles have no table or function access; only the Node server's secret key can use them. The Security Advisor reports informational “RLS Enabled No Policy” notices because this access model intentionally denies browser clients. [Supabase's explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
-
-Real SQL verification checked the read/write functions using `service_role`, revision advancement, stale-write rejection, and role grants. The write test ran in a transaction that was rolled back; no test records or grades remain.
-
-Class setup is also completed: **1 teacher, 41 students with roll numbers 1–41, and Lab 1/Lab 2 as drafts**, each with three tasks and its original instruction document. Names come from the supplied marks-sheet image; unnamed rows remain blank. No sample submissions or grades were imported. All 42 accounts store salted scrypt password hashes; plaintext passwords are absent from the database.
-
-LabTrack uses its own teacher/student accounts and secure server sessions. The Supabase Auth Users page remains empty because this application does not use Supabase Auth.
-
-## Connect the local application
-
-The ignored `.env` file contains the correct project URL, `LABTRACK_DEMO=false`, the generated teacher login, and the locally supplied secret key. **The local application connection is verified:** admin/student login succeeded through the Vite API proxy, and the teacher account sees all 41 students and both labs. For a fresh setup, enter a server-only key locally:
+Preserve an existing root `.env`. Otherwise create one using `.env.supabase.example` as a template, then enter the server-only key privately:
 
 ```dotenv
-SUPABASE_SECRET_KEY=your-server-only-secret-key
+HOST=127.0.0.1
+PORT=3001
+CLIENT_ORIGIN=http://127.0.0.1:5173
+LABTRACK_DEMO=false
+SUPABASE_URL=https://akudfcgksdjlipxxwfdu.supabase.co
+SUPABASE_SECRET_KEY=YOUR_SERVER_ONLY_SECRET
 ```
 
-Get the secret key from the project's API Keys settings. A legacy `service_role` key is also accepted. Never use a publishable key here, put the secret in a `VITE_` variable, commit `.env`, or paste credentials into chat. [Supabase API key guidance](https://supabase.com/docs/guides/getting-started/api-keys).
+Use an `sb_secret_...` key from the project's API key settings; the adapter also supports a legacy service-role JWT. Never use a publishable key, put this secret in a `VITE_` variable, commit it or paste it into a prompt. See [Supabase API key guidance](https://supabase.com/docs/guides/getting-started/api-keys).
 
-Run `npm run dev` after saving the file. Teacher credentials and each student's unique password are in the private, ignored `.data/class-credentials.csv`; students sign in using their roll number. Review the draft lab deadlines and marks before publishing. The local `.data/labtrack.json` demo file is preserved and is not copied into the hosted database. The image's name mapping remains available in `server/seed.ts`.
+Omit MongoDB settings. Existing accounts require their existing passwords; `ADMIN_*` is only for initializing an empty database. A new checkout does not include the ignored credentials CSV. Request the existing private sheet through the owner's normal secure process; do not regenerate credentials to recover it.
 
-During development, saving `.env` automatically restarts the API. If the secret key is blank, the API stays available and returns a clear setup message with HTTP 503 instead of leaving Vite to report a generic proxy 500. Read requests retry briefly if the proxy returns an empty gateway error during a restart; writes and real API errors are not replayed. Fill in the key, save, then use **Try again** in the browser. This setup response is development-only; production continues to reject incomplete database settings.
+```powershell
+npm ci
+npm run dev
+```
 
-`npm run prepare:class` reopens the existing local credentials without generating new passwords. `npm run provision:class` can check/provision the class once the key is configured; it refuses to reset conflicting existing credentials and preserves saved work. The private JSON/CSV credential files are excluded from source archives and deployment uploads.
+Sign in manually as the existing teacher or a student using roll number/email. The application uses its own accounts and cookies, so an empty Supabase Auth Users page is expected.
 
-The backend is one local Node process. Records persist in Supabase across restarts. Restart it after manual database changes, since it holds a working snapshot in memory. File upload limits are 60 files, 1 MB per source file and 4 MB total uploaded/extracted project content. Original instruction documents may be up to 3 MB.
+## Development behavior
 
-## Final connection check
+Saving `.env` restarts Node automatically. If the URL is present and the key is missing, a development-only HTTP 503 explains the missing setting. Save the correct key then use Try again. Empty proxy gateway errors briefly retry reads during restarts; writes and JSON API errors are not replayed.
 
-After entering the local settings, verify teacher sign-in/out, create a real lab or student, restart the Node process, and confirm that the record remains in both the portal and `labtrack_records`. Check task upload, sandboxed preview, grading and the per-lab CSV/print sheet before using it for the class.
+The persistent Node API holds a working snapshot. Restart after manual/external database changes; its Supabase mode does not refresh before every request. Changes are atomic and revision-checked. A conflict reloads and returns 409; refresh the UI and review before saving again.
 
-The Vercel serverless deployment is implemented and live. See [deployment details](launch.md) for its verified behavior, secret settings and usage limits.
+Demo `.data/labtrack.json` is separate and never copied into Supabase. It is retained on disk if it already exists. Do not enable demo mode against the real project. Uploads and attachments consume database space; [analysis](analysis.md) documents limits and preview behavior.
+
+## Schema and class setup status
+
+Read-only checks on **13 October 2026** confirmed all five hosted migrations, RLS on the three tables, denied browser reads/function execution and permitted server access. `labtrack_records` stores collection documents, `labtrack_meta` stores global revision and `labtrack_login_limits` stores serverless login budgets. All persistence/limiter functions are security invoker and server-restricted.
+
+The initial class bootstrap created one teacher, 41 roll-number students and two draft labs with three tasks each and original attachments, without demo submissions/grades. That is a historical setup description: the class now has saved work, and records continue to change. Do not overwrite it with a seed. Consult aggregate SQL in [supabase.md](supabase.md) for current metadata without exposing documents.
+
+`npm run prepare:class` reuses credentials if their private JSON exists, regenerates the CSV and writes teacher admin settings to `.env`. If the JSON is missing it creates new credentials. `npm run provision:class` also prepares files before checking/adding missing hosted accounts, refusing conflicting existing passwords. These commands have side effects and are unnecessary for routine startup. Keep both credential files protected.
+
+## Connection verification
+
+In normal read-only work check login/logout and expected role-filtered state. For persistence/upload/grading tests use an isolated environment rather than real classroom records. Verify source/images, sandbox preview, draft privacy, stale grade handling and CSV/print as described in [operations](operations.md).
+
+Earlier project notes recorded successful local Supabase-backed teacher/student sign-in and visibility of the 41-student roster/two labs. The documentation review rechecked schema permissions/history, not real account sign-in or mutation workflows. The [deployment guide](launch.md) records production configuration separately.

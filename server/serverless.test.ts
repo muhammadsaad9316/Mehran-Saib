@@ -2,8 +2,53 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 import handler from "../api/index.js";
+import { createApp } from "./app.js";
 import { emptyDatabase } from "./store.js";
 import { hashPassword } from "./auth.js";
+
+test("concurrent first requests initialize one teacher after a database conflict", async (t) => {
+  const remote = emptyDatabase();
+  let revision = 0;
+  let initialReads = 0;
+  let writes = 0;
+  let conflicts = 0;
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    const body = JSON.parse(String(options.body));
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+    if (url.endsWith("labtrack_read_if_changed")) {
+      if (remote.users.length === 0) initialReads++;
+      return json({ revision, data: body.known_revision === revision ? null : remote });
+    }
+    assert.ok(url.endsWith("labtrack_write"));
+    writes++;
+    if (body.expected_revision !== revision) {
+      conflicts++;
+      return json({ code: "PT409" }, 409);
+    }
+    for (const item of body.upserts) {
+      assert.equal(item.collection, "users");
+      remote.users.push(item.document);
+    }
+    return json(++revision);
+  });
+  const options = {
+    production: true, demo: false, serverless: true, mongoUri: "",
+    supabaseUrl: "https://bootstrap-test.supabase.co", supabaseKey: "sb_secret_bootstrap_testing",
+    adminEmail: "bootstrap@example.test", adminPassword: "BootstrapFixture2026!",
+  };
+  const apps = await Promise.all([createApp(options), createApp(options)]);
+  try {
+    assert.equal(initialReads, 2);
+    assert.equal(conflicts, 1);
+    assert.equal(writes, 2);
+    assert.equal(revision, 1);
+    assert.equal(remote.users.length, 1);
+    assert.equal(remote.users[0].role, "teacher");
+    assert.equal(apps[0].locals.store.data.users[0].id, apps[1].locals.store.data.users[0].id);
+  } finally {
+    await Promise.all(apps.map(app => app.locals.store.close()));
+  }
+});
 
 test("serverless requests retain sessions, read fresh data, upload and grade without a shared process", async (t) => {
   const env = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY };

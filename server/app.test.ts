@@ -241,6 +241,24 @@ test("teacher sees demo roster; student sees only their published labs and submi
   await student.post("/api/labs").send({}).expect(403);
 });
 
+test("unpublishing a lab hides retained submission file and analysis URLs from students", async () => {
+  const submissionPath = "/api/submissions/submission-2-1-1";
+  await student.get(`${submissionPath}/files/article.html`).expect(200);
+  await teacher.patch("/api/labs/lab2").send({ published: false }).expect(200);
+  try {
+    const own = await student.get("/api/state").expect(200);
+    assert.ok(!own.body.labs.some((lab: { id: string }) => lab.id === "lab2"));
+    assert.ok(!own.body.submissions.some((submission: Submission) => submission.labId === "lab2"));
+    await student.get(`${submissionPath}/files/article.html`).expect(404);
+    await student.get(`${submissionPath}/analysis`).expect(404);
+    await teacher.get(`${submissionPath}/files/article.html`).expect(200);
+    await teacher.get(`${submissionPath}/analysis`).expect(200);
+  } finally {
+    await teacher.patch("/api/labs/lab2").send({ published: true }).expect(200);
+  }
+  await student.get(`${submissionPath}/files/article.html`).expect(200);
+});
+
 test("students can sign in by roll number and roster numbers must be 1–41", async () => {
   const byRoll = request.agent(app);
   await byRoll

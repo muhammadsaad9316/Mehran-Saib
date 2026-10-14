@@ -1,5 +1,7 @@
 # Free-tier database audit — 13 October 2026
 
+This is a historical audit with measurements from the stated window, not a live status page. For current design and operating procedures, see [Supabase](supabase.md), [operations](operations.md) and the [documentation index](README.md). Later classroom counts and provider settings may differ.
+
 Project: LabTrack (`akudfcgksdjlipxxwfdu`). The deployed application is https://labtrack-lilac.vercel.app.
 
 ## Measured baseline

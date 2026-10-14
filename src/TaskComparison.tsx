@@ -13,17 +13,20 @@ interface Props {
 
 export default function TaskComparison({ left, right, task, state, pair, onBack, onRefresh, loading, available }: Props) {
   const [view, setView] = useState("preview");
-  const [blocks, setBlocks] = useState<{ source: string; peer: string }[]>([]);
+  const [evidence, setEvidence] = useState<{ fingerprint: string; blocks: { source: string; peer: string }[] } | null>(null);
   const [evidenceError, setEvidenceError] = useState("");
   const [gradingWarning, setGradingWarning] = useState("");
+  const evidenceFingerprint = JSON.stringify([left.id, left.revision, right.id, right.revision, task.description, task.requirements]);
+  const blocks = evidence?.fingerprint === evidenceFingerprint ? evidence.blocks : [];
   useEffect(() => {
     let active = true;
-    setBlocks([]); setEvidenceError("");
-    api<AnalysisResult>(`/submissions/${left.id}/analysis?peerId=${encodeURIComponent(right.id)}`)
-      .then((analysis) => { if (active) setBlocks(analysis.similarities.find((match) => match.submissionId === right.id)?.matchingBlocks || []); })
+    const controller = new AbortController();
+    setEvidence(null); setEvidenceError("");
+    api<AnalysisResult>(`/submissions/${left.id}/analysis?peerId=${encodeURIComponent(right.id)}`, { signal: controller.signal })
+      .then((analysis) => { if (active) setEvidence({ fingerprint: evidenceFingerprint, blocks: analysis.similarities.find((match) => match.submissionId === right.id)?.matchingBlocks || [] }); })
       .catch((cause) => { if (active) setEvidenceError(cause.message); });
-    return () => { active = false; };
-  }, [left.id, left.revision, right.id, right.revision]);
+    return () => { active = false; controller.abort(); };
+  }, [evidenceFingerprint]);
   return <section className="task-comparison" aria-label="Side by side task comparison">
     <div className="task-comparison-heading">
       <button className="teacher-text-button" onClick={onBack}><ArrowLeft size={16} /> Back to tasks</button>
@@ -39,7 +42,7 @@ export default function TaskComparison({ left, right, task, state, pair, onBack,
     {gradingWarning && <p className="error" role="alert">{gradingWarning}</p>}
     {view === "source" && <p className="task-check-note">Highlighted lines show sample matching blocks; the score covers both tasks.</p>}
     <div className="task-comparison-grid">
-      {[left, right].map((submission, index) => <ComparisonPane key={`${submission.id}-${submission.revision}`} submission={submission} task={task} state={state} onRefresh={onRefresh} view={view} matches={blocks.map((block) => index === 0 ? block.source : block.peer)} onStale={() => setGradingWarning("A student resubmitted while you were grading. The latest revision is loaded; review it before saving marks again.")} onGradeSaved={() => setGradingWarning("")} />)}
+      {[left, right].map((submission, index) => <ComparisonPane key={`${submission.id}-${submission.revision}`} submission={submission} task={task} state={state} onRefresh={onRefresh} view={view} matches={blocks.map((block) => index === 0 ? block.source : block.peer)} onStale={() => setGradingWarning("The submission changed while you were grading. Review the latest revision before saving marks again.")} onGradeSaved={() => setGradingWarning("")} />)}
     </div>
   </section>;
 }
@@ -70,16 +73,21 @@ function ComparisonPane({ submission, task, state, onRefresh, view, matches, onS
     event.preventDefault(); setError(""); setNotice(""); setSaving(true);
     try {
       await api(`/submissions/${submission.id}/grade`, { method: "PATCH", body: JSON.stringify({ marks: Number(marks), feedback, published: publish, revision: submission.revision }) });
-      await onRefresh();
       onGradeSaved();
       setNotice(publish ? "Grade published." : "Draft grade saved.");
+      try { await onRefresh(); }
+      catch (cause) { setError(`The grade was saved, but the workspace could not refresh. ${cause instanceof Error ? cause.message : "Refresh before grading again."}`); }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save the grade.");
-      if ((cause as { status?: number }).status === 409) { onStale(); await onRefresh().catch(() => {}); }
+      if ((cause as { status?: number }).status === 409) {
+        onStale();
+        try { await onRefresh(); }
+        catch (refreshCause) { setError(`The submission changed, and the latest revision could not load. ${refreshCause instanceof Error ? refreshCause.message : "Refresh the workspace before grading again."}`); }
+      }
     } finally { setSaving(false); }
   }
   const label = `Roll ${student?.rollNumber ?? "?"}`;
-  const content = submission.files.find((item) => item.path === file)?.content || "No uploaded source files.";
+  const content = submission.files.find((item) => item.path === file)?.content ?? "No uploaded source files.";
   const ranges = matches.flatMap((match) => {
     const newline = match.indexOf("\n");
     if (match.slice(0, newline) !== file) return [];

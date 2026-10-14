@@ -262,3 +262,28 @@ test("identical multi-file projects retain full coverage including smaller linke
   const peer = {...own, id: 'b', studentId: 'b'};
   assert.equal(analyzeSubmission(own, [peer], task).similarities[0].percentage, 100);
 });
+
+test("41-student batch scores retain repeated multi-file counts and agree with individual review", () => {
+  const common = 'function total(values){let sum=0;for(const value of values){if(value>0){sum+=value*1.05;}}return Math.round(sum*100)/100;}';
+  const peers = Array.from({ length: 41 }, (_, index) => {
+    const project = submission(`student-${index}`, "app.js", common);
+    for (let copy = 0; copy < index % 3; copy++)
+      project.files.push({ path: `copy-${copy}.js`, content: common });
+    project.files.push({ path: "contact.html", content: "<p>Contact our research team</p>" });
+    return project;
+  });
+  const batch = analyzeTaskSubmissions(peers, task);
+  assert.equal(batch.submissions.length, 41);
+  assert.equal(batch.pairs.length, 820);
+  assert.ok(batch.pairs.every((pair) => pair.comparable));
+  const individual = analyzeSubmission(peers[0], peers.slice(1), task);
+  for (const match of individual.similarities) {
+    const pair = batch.pairs.find((candidate) => candidate.leftId === peers[0].id && candidate.rightId === match.submissionId)!;
+    assert.equal(pair.percentage, match.percentage);
+    assert.equal(pair.sourceCoverage, match.sourceCoverage);
+    assert.equal(pair.peerCoverage, match.peerCoverage);
+    assert.equal(pair.comparable, match.comparable);
+    assert.equal(pair.sourceCoverage, 100);
+    assert.equal(pair.percentage === 100, Number(match.studentId.split("-")[1]) % 3 === 0);
+  }
+});

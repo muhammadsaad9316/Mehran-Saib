@@ -379,15 +379,16 @@ export async function createApp(options: AppOptions = {}) {
         );
       }
       const passwordHash = await hashPassword(password);
-      await store.mutate((data) =>
+      await store.mutate((data) => {
+        if (data.users.length) return;
         data.users.push({
           id: randomUUID(),
           name: options.adminName || process.env.ADMIN_NAME || "Teacher",
           email: email.toLowerCase(),
           role: "teacher",
           passwordHash,
-        }),
-      );
+        });
+      });
     }
   }
   const students = store.data.users.filter((user) => user.role === "student");
@@ -500,7 +501,9 @@ export async function createApp(options: AppOptions = {}) {
     const submission = store.data.submissions.find((item) => item.id === id);
     if (
       !submission ||
-      (user.role === "student" && submission.studentId !== user.id)
+      (user.role === "student" &&
+        (submission.studentId !== user.id ||
+          !store.data.labs.some((lab) => lab.id === submission.labId && lab.published)))
     )
       throw new HttpError(404, "Submission not found.");
     return submission;

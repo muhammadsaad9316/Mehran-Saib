@@ -1,21 +1,40 @@
 # LabTrack
 
-A working Web Engineering lab submission and grading app. React + TypeScript and Tailwind power the interface; an Express API handles sessions, task submissions, grading, analysis and reports. Supabase is the selected hosted database, with a private local JSON store so you can run the project immediately. The teacher portal uses a teaching studio layout with warm paper surfaces, graphite navigation, orange actions, a per-student submission matrix, published/draft filters and a review desk.
+LabTrack is a Web Engineering classroom application. Teachers publish lab tasks, review submitted websites, compare code, assign marks and export marks sheets. Students sign in with a roll number or email, upload work for each task and see published feedback.
+
+**Start with the [documentation index](docs/README.md).** It includes a reading order for new developers and AI coding tools.
+
+## How it works
+
+```mermaid
+flowchart LR
+  Browser[React teacher / student portal] -->|Same-origin /api requests and session cookie| API[Express API]
+  API -->|Server-only secret key and versioned RPCs| DB[Supabase Postgres]
+  API --> Checks[Upload validation, analysis, grading, reports]
+```
+
+The browser communicates through Express. LabTrack implements its own accounts and sessions; it does not use Supabase Auth. Uploaded source, images and instruction attachments live in private database records. Supabase Storage, Realtime and Edge Functions are not part of the current implementation.
+
+The documented production site is [labtrack-lilac.vercel.app](https://labtrack-lilac.vercel.app), hosted on Vercel with Supabase persistence. Local JSON and MongoDB adapters are also available. See [architecture](docs/architecture.md) for the differences between a persistent Node process and the Vercel handler.
 
 ## Run locally
 
-Use Node.js 22 or newer.
-
-The selected setup runs the application locally and stores its data in the existing LabTrack Supabase project. Its schema and SQL functions are applied and verified. Follow [the local Supabase setup](docs/supabase-local.md) and fill in the private `.env` values before starting. The public site is https://labtrack-lilac.vercel.app; see [deployment details](docs/launch.md).
+Use Node.js 22 or newer; the documented production runtime is Node 24. Install the locked dependencies:
 
 ```powershell
-npm install
+npm ci
+```
+
+Preserve an existing private `.env`. For an isolated demo, create it from the example only when it does not exist:
+
+```powershell
+if (!(Test-Path -LiteralPath .env)) { Copy-Item -LiteralPath .env.example -Destination .env }
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173**. For an isolated demo, use `.env.example` with Supabase settings omitted. The demo opens a minimal teacher workspace with roll numbers 1–41 and names transcribed from the supplied marks-sheet image. Rolls 16, 26, 27, 30, 34, 37 and 39 have no name in that image; their export cells stay blank. Use **Student demo** in the top bar to try submitting work. Existing sample names and legacy roll numbers are migrated while account IDs, email aliases, passwords, submissions and grades remain intact. Demo records persist across restarts in `.data/labtrack.json` and are not copied into the hosted database.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The isolated demo requires hosted database settings to be absent from the environment. It saves to `.data/labtrack.json` and automatically opens the teacher demo. Sample login: `teacher@labtrack.edu`, or student roll `1`, with `LabTrack2026!`. These are public sample credentials, never production credentials.
 
-To sign in manually, use `teacher@labtrack.edu` or student roll number `1` with `LabTrack2026!`. Students may also use their email address. These credentials are for local demo data only.
+For the existing hosted classroom, follow [local Supabase setup](docs/supabase-local.md). For a fresh database or other persistence mode, follow [getting started](docs/getting-started.md). Do not point demo mode at a real class database.
 
 ```powershell
 npm test
@@ -23,48 +42,42 @@ npm run build
 npm start
 ```
 
-`npm start` serves the built frontend and API together at http://127.0.0.1:3001. Copy `.env.example` to `.env` when configuring a different port, private data directory or MongoDB. The server reads `.env` with Node's built-in loader.
+The build checks TypeScript and creates `dist/`. `npm start` serves that build and the API at [http://127.0.0.1:3001](http://127.0.0.1:3001). The development frontend always proxies `/api` to port 3001; changing `PORT` also requires updating that proxy.
 
-## Included workflows
+## Documentation
 
-To try the analyzer with sample data, run `npm run demo:analysis` after building and open **http://127.0.0.1:3012**. Choose **Check tasks → Lab 1 or Lab 2 → Task 1**. Rolls 1, 2 and 3 match; roll 4 shares only a small part of a larger project, roll 5 is missing, and roll 6 has a syntax error needing manual review. This demo keeps edits in `.data/analysis-demo` and never uses hosted databases or loads `.env`.
+| Guide | What it explains |
+| --- | --- |
+| [Documentation index](docs/README.md) | Reading order, terminology and verification scope |
+| [Getting started](docs/getting-started.md) | Demo, existing classroom, fresh database and provisioning |
+| [Architecture](docs/architecture.md) | Repository map, domain model, request flows and invariants |
+| [Frontend](docs/frontend.md) | Components, state, styling, preview and change recipes |
+| [Backend](docs/backend.md) | Express lifecycle, authorization, validation and persistence |
+| [API reference](docs/api.md) | Every route, request/response contracts and errors |
+| [Supabase](docs/supabase.md) | Tables, functions, grants, migrations and concurrency |
+| [Configuration](docs/configuration.md) | Environment variables and runtime modes |
+| [Analysis and uploads](docs/analysis.md) | Parser checks, similarity, extraction and limits |
+| [Operations](docs/operations.md) | Tests, troubleshooting, backups and maintenance |
+| [Deployment](docs/launch.md) | Vercel configuration and release checks |
+| [AI development](docs/ai-development.md) | Context handoff and modification patterns |
+| [AGENTS.md](AGENTS.md) | Repository instructions for coding agents |
+| [Assignment requirements](docs/lab-requirements.md) | Original assignments and manual review |
+| [Free-tier audit](docs/free-tier-audit.md) | Historical measurements from 13 October 2026 |
 
-- Teachers enter task instructions and marks directly, edit one task at a time, and save or publish. Automatic checks and the lab overview are optional, collapsed sections. Existing tasks retain their IDs when edited so submissions stay linked; saved instruction attachments remain available to students.
-- Students upload individual files, project folders, ZIPs, and/or HTTP(S) project links. Paths survive uploads. Each task has its own submission and revision.
-- Teachers preview local HTML/CSS/JS and raster assets in an opaque sandbox, inspect source files and select HTML entrypoints. Local page links work within the viewer.
-- Parser-based checks inspect actual HTML elements, attributes, visible text and files. HTML/CSS/JavaScript comparisons provide similarity evidence and quality observations.
-- **Check tasks** gives teachers a lab/task queue with requirement scores, quality observations, missing work, grades and similarity matches. Flags default to over 70% matching coverage in **both** tasks; teachers can switch to over 50%. All matched students are flagged, including groups of three or more. Compare opens complete projects side by side, with linked-page previews, source files, highlighted sample matching blocks and independent grading forms. Analysis never changes marks.
-- Teachers assign task-level marks and feedback, save private draft grades or publish results. Resubmission clears the old grade and requires another review. Stale review grading is rejected.
-- The teacher dashboard shows submitted/missing counts and a submission matrix for published labs, with one block per student in roll-number order. Graphite blocks indicate graded submissions, orange indicates work awaiting review, and neutral blocks indicate no submission. Clicking a published lab title opens its expanded details in Labs; clicking a count opens the filtered roll-number roster. Drafts show an edit action until published. The review desk opens the next ungraded task and lists three tasks in the queue. Teacher navigation contains Dashboard, Labs, Students and Check tasks.
-- Students can sign out from the labeled button in the top bar on desktop and mobile, returning to the sign-in screen.
-- Each lab exports a four-column marks sheet: R. No, Name, Marks in Figure and Marks in Words. The heading uses the college from the supplied reference, Lab N Marks Sheet (Fall 2026), BS Computer Science, Semester 7th and Web Engineering. A total appears only when all tasks have saved grades; incomplete totals remain blank. Teacher exports include saved draft grades. A printable A4 view matches the reference's page layout.
-- Student profiles show submission history across every lab and task.
+## Core behavior
 
-The original two supplied assignments are included with their three tasks. Lab 1 uses its exact filenames. Only student names were imported from the marks-sheet image; its exam marks were not imported. The third lab, account email aliases, submissions, dates and grades are illustrative. Original assignment content and parser limitations are recorded in [docs/lab-requirements.md](docs/lab-requirements.md).
+- Teachers save draft labs or publish them. Labs have 1–20 tasks with independent instructions, checklists and marks. Task IDs stay stable during edits.
+- Students submit files, folders, ZIPs and/or an HTTP(S) link per task. Resubmission replaces the project, increases its revision and clears its grade. Old revisions are not archived.
+- Teachers save private draft grades or publish feedback. Grade requests include the reviewed revision; stale grades are rejected.
+- Check tasks shows missing work, requirements, quality observations and similarity evidence. Flags require matching coverage strictly over 70% by default, or over 50%, in both comparable projects. Analysis never changes marks and does not detect AI authorship.
+- CSV/A4 reports have four columns: R. No, Name, Marks in Figure, Marks in Words. Totals require all task grades, including teacher draft grades. Blank totals and zero marks differ.
 
-## System design
+The demo roster contains rolls 1–41 from the supplied marks-sheet names. Rolls 16, 26, 27, 30, 34, 37 and 39 have no supplied name. Exam marks from that image were not imported. Demo dates, aliases, submissions and grades are illustrative; real class provisioning imports accounts and two draft labs without demo submissions.
 
-```text
-React teacher/student portal
-          │ same-origin JSON + multipart requests
-          ▼
-Express API — role authorization + sessions + validation
-          ├── bounded project import / safe downloads
-          ├── HTML, CSS and JavaScript analysis
-          ├── per-task grading / CSV export
-          └── persistence: Supabase (selected), local JSON or MongoDB
-```
+For matching examples, run `npm run build` and `npm run demo:analysis`, then open [http://127.0.0.1:3012](http://127.0.0.1:3012). This uses a separate store and cookie, with hosted access explicitly disabled.
 
-`shared/types.ts` defines the browser/API contract. A `Lab` contains `Task` records and requirement rules. A `Submission` is unique per student, lab and task and includes files, a revision and an optional grade. Published grades are visible to the corresponding student. Session tokens and password hashes stay on the server. Activity records describe teacher workflow events.
+## Current boundaries
 
-## Deployment and practical limits
+This is a single-class app with rolls limited to 1–41. There is no self-registration, password-reset UI, multi-class tenancy, realtime subscription or object-storage integration. Persistent servers use one in-memory working snapshot. Vercel uses request-owned snapshots, revision-checked caching and bounded conflict retries. Submitted code executes only in the restricted browser preview; remote project links are not fetched by the server.
 
-The public site runs on Vercel with its Express API and the private Supabase database. No Render service is needed. See [deployment details and free-plan limits](docs/launch.md). The local workflow remains available through [the local guide](docs/supabase-local.md).
-
-For a real class, use a **fresh database**, disable demo mode, configure a unique initial teacher password and serve the app over HTTPS. Production refuses the seeded demo database. MongoDB writes require an Atlas cluster or replica set for transactions. The Vercel handler reads fresh data for each request and retries atomic saves against current records. The local JSON/MongoDB server continues to assume one process.
-
-Uploaded code runs only inside the isolated preview. Its asset loads and fetch requests are restricted by CSP; JavaScript execution is allowed within that sandbox. External libraries, module imports and remote project links are not fetched or executed by the server. Similarity is heuristic evidence for human review. It neither proves copying nor assigns marks, and the app contains no AI authorship detection.
-
-The preview follows the opaque iframe approach described in [MDN's srcdoc security guidance](https://developer.mozilla.org/en-US/docs/Web/API/HTMLIFrameElement/srcdoc). The session cookie configuration follows [Express's session security guidance](https://expressjs.com/en/resources/middleware/session/).
-
-Supabase schema, role grants, real SQL read/write execution, and local teacher/student sign-in are verified. The teacher sees all 41 students and both draft labs through the Supabase-backed API. Public hosting, secure teacher/student sign-in, private access and sign-out are verified. [Backend configuration and limits](docs/backend.md) has the API and storage details. Existing MongoDB support remains available for older configurations.
+Documentation was reviewed against source and read-only Supabase metadata on **13 October 2026**. Provider quotas and historical hosting observations can change; the guides identify verification limits.

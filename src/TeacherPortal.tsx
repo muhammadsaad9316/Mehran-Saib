@@ -154,9 +154,9 @@ export default function TeacherPortal({
           {(
             [
               ["dashboard", "Dashboard", SquaresFour],
+              ["checks", "Check tasks", ShieldCheck],
               ["labs", "Labs", BookOpen],
               ["students", "Students", UsersThree],
-              ["checks", "Check tasks", ShieldCheck],
             ] as const
           ).map(([item, label, Icon]) => (
             <button

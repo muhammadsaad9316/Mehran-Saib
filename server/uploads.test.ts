@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import AdmZip from "adm-zip";
-import { MAX_UPLOAD_BYTES, parseUploads, safeFilePath } from "./uploads.js";
+import { HttpError, MAX_UPLOAD_BYTES, parseUploads, safeFilePath } from "./uploads.js";
 
 test("safe project paths preserve nesting and reject traversal, hidden or absolute paths", () => {
   assert.equal(
@@ -50,6 +50,19 @@ test("decompression limits reject highly compressed expansion before importing",
         { originalname: "compressed.zip", buffer: zip.toBuffer() },
       ]),
     /extracted content exceeds/,
+  );
+});
+
+test("damaged ZIP central directories return a readable client error", () => {
+  const zip = new AdmZip();
+  zip.addFile("index.html", Buffer.from("<h1>Hello</h1>"));
+  const bytes = zip.toBuffer();
+  const centralHeader = bytes.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  assert.ok(centralHeader >= 0);
+  bytes.writeUInt32LE(0, centralHeader);
+  assert.throws(
+    () => parseUploads([{ originalname: "broken.zip", buffer: bytes }]),
+    (error: unknown) => error instanceof HttpError && error.status === 400 && error.message === "Could not read this ZIP file.",
   );
 });
 

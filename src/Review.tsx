@@ -15,6 +15,7 @@ import {
 import type { AppState, AnalysisResult, Submission } from "../shared/types";
 import { api, saveFile } from "./api";
 import { buildPreview, resolvePath } from "./preview";
+import { useSubmissionAssets } from "./submission-assets";
 
 export default function Review({
   submission,
@@ -40,8 +41,9 @@ export default function Review({
   const [entry, setEntry] = useState(
     submission.files.find((f) => /\.html?$/i.test(f.path))?.path || "",
   );
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [assets, setAssets] = useState<Record<string, string>>({});
+  const [analysisResult, setAnalysisResult] = useState<{ fingerprint: string; value: AnalysisResult } | null>(null);
+  const [analysisError, setAnalysisError] = useState("");
+  const { assets, assetError } = useSubmissionAssets(submission);
   const [marks, setMarks] = useState(String(submission.grade?.marks ?? ""));
   const [feedback, setFeedback] = useState(submission.grade?.feedback || "");
   const [publish, setPublish] = useState(submission.grade?.published ?? true);
@@ -51,45 +53,37 @@ export default function Review({
   const [peer, setPeer] = useState<
     AnalysisResult["similarities"][number] | null
   >(null);
+  const analysisFingerprint = JSON.stringify([
+    submission.id,
+    task.description,
+    task.requirements,
+    state.submissions
+      .filter((item) => item.labId === lab.id && item.taskId === task.id)
+      .map((item) => `${item.id}:${item.revision}`)
+      .sort(),
+  ]);
+  const analysis = analysisResult?.fingerprint === analysisFingerprint ? analysisResult.value : null;
   useEffect(() => {
     if (state.user?.role !== "teacher") return;
     let active = true;
-    api<AnalysisResult>(`/submissions/${submission.id}/analysis`)
+    const controller = new AbortController();
+    setAnalysisResult(null);
+    setAnalysisError("");
+    setPeer(null);
+    api<AnalysisResult>(`/submissions/${submission.id}/analysis`, {
+      signal: controller.signal,
+    })
       .then((a) => {
-        if (active) setAnalysis(a);
+        if (active) setAnalysisResult({ fingerprint: analysisFingerprint, value: a });
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) setAnalysisError(e.message);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [submission.id, state.user?.role]);
-  useEffect(() => {
-    let active = true;
-    Promise.all(
-      (submission.assets || []).map(async (asset) => {
-        const response = await fetch(
-          `/api/submissions/${submission.id}/files/${asset.path.split("/").map(encodeURIComponent).join("/")}`,
-        );
-        if (!response.ok) return [asset.path, ""];
-        const blob = await response.blob();
-        return [
-          asset.path,
-          await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.readAsDataURL(blob);
-          }),
-        ];
-      }),
-    ).then((entries) => {
-      if (active) setAssets(Object.fromEntries(entries));
-    });
-    return () => {
-      active = false;
-    };
-  }, [submission]);
+  }, [submission.id, submission.revision, analysisFingerprint, state.user?.role]);
   const preview = useMemo(
     () => buildPreview(submission, entry, assets),
     [submission, entry, assets],
@@ -117,6 +111,7 @@ export default function Review({
   }, [entry, submission.files]);
   async function grade() {
     setError("");
+    setNotice("");
     setBusy(true);
     try {
       await api(`/submissions/${submission.id}/grade`, {
@@ -128,15 +123,24 @@ export default function Review({
           revision: submission.revision,
         }),
       });
-      await onSaved();
       setNotice(
         publish ? "Grade published to the student." : "Grade saved as a draft.",
       );
+      try {
+        await onSaved();
+      } catch (cause) {
+        setError(`The grade was saved, but the workspace could not refresh. ${cause instanceof Error ? cause.message : "Refresh before grading again."}`);
+      }
     } catch (e) {
       if ((e as Error & { status?: number }).status === 409) {
-        await onSaved(
-          "The submission changed. Review the latest revision before grading.",
-        );
+        setError("The submission changed. Review the latest revision before grading.");
+        try {
+          await onSaved(
+            "The submission changed. Review the latest revision before grading.",
+          );
+        } catch (cause) {
+          setError(`The submission changed, and the latest revision could not load. ${cause instanceof Error ? cause.message : "Refresh the workspace before grading again."}`);
+        }
       } else {
         setError((e as Error).message);
       }
@@ -279,6 +283,7 @@ export default function Review({
                     ? "Local CSS, scripts, images and page links are supported. External resources and fetch requests are restricted. Preview is isolated from this workspace."
                     : "External resources are blocked in this preview."}
                 </p>
+                {assetError && <p className="error" role="alert">{assetError}</p>}
               </>
             )}
             {tab === "code" && (
@@ -326,7 +331,7 @@ export default function Review({
                   </div>
                   <pre>
                     {(
-                      submission.files.find((f) => f.path === file)?.content ||
+                      submission.files.find((f) => f.path === file)?.content ??
                       "Only a project link was submitted. Source analysis requires uploaded files."
                     )
                       .split("\n")
@@ -345,8 +350,8 @@ export default function Review({
                 {!analysis ? (
                   <div className="empty-state">
                     <ShieldCheck size={36} />
-                    <p>
-                      {error || "Checking requirements and comparing code…"}
+                    <p role={analysisError ? "alert" : "status"}>
+                      {analysisError || "Checking requirements and comparing code…"}
                     </p>
                   </div>
                 ) : (
@@ -507,6 +512,7 @@ export default function Review({
                   Marks
                   <div className="marks-input">
                     <input
+                      disabled={busy}
                       type="number"
                       min="0"
                       max={task.maxMarks}
@@ -521,6 +527,7 @@ export default function Review({
                 <label className="field">
                   Feedback
                   <textarea
+                    disabled={busy}
                     rows={5}
                     maxLength={4000}
                     value={feedback}
@@ -530,6 +537,7 @@ export default function Review({
                 </label>
                 <label className="check-field">
                   <input
+                    disabled={busy}
                     type="checkbox"
                     checked={publish}
                     onChange={(e) => setPublish(e.target.checked)}

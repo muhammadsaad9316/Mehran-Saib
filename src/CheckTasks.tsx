@@ -13,13 +13,21 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
   const [threshold, setThreshold] = useState(70);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<TaskAnalysis | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{ fingerprint: string; value: TaskAnalysis } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [comparison, setComparison] = useState<[string, string] | null>(null);
   const submissions = state.submissions.filter((item) => item.labId === lab?.id && item.taskId === task?.id);
-  const fingerprint = submissions.map((item) => `${item.id}:${item.revision}`).sort().join("|");
+  const fingerprint = JSON.stringify([
+    lab?.id,
+    task?.id,
+    task?.description,
+    task?.requirements,
+    submissions.map((item) => `${item.id}:${item.revision}`).sort(),
+  ]);
+  const result = analysisResult?.fingerprint === fingerprint ? analysisResult.value : null;
   useEffect(() => {
     setComparison(null);
   }, [lab?.id, task?.id]);
@@ -27,9 +35,9 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
     if (!lab || !task) return;
     let active = true;
     const controller = new AbortController();
-    setLoading(true); setError(""); setResult(null);
+    setLoading(true); setError(""); setAnalysisResult(null);
     api<TaskAnalysis>(`/labs/${encodeURIComponent(lab.id)}/analysis?taskId=${encodeURIComponent(task.id)}`, { signal: controller.signal })
-      .then((value) => { if (active) setResult(value); })
+      .then((value) => { if (active) setAnalysisResult({ fingerprint, value }); })
       .catch((cause) => { if (active) setError(cause.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
@@ -51,7 +59,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
       </select></label>
       <label>Task<select aria-label="Check tasks task" value={task.id} onChange={(event) => setTaskId(event.target.value)}>{lab.tasks.map((item, index) => <option key={item.id} value={item.id}>Task {index + 1} · {item.title}</option>)}</select></label>
       <label>Flag matches<select aria-label="Similarity threshold" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))}><option value={70}>Over 70%</option><option value={50}>Over 50%</option></select></label>
-      <button className="task-check-refresh" aria-label="Refresh task submissions" disabled={loading} onClick={async () => { setError(""); try { await onRefresh(); setReload((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh submissions."); } }}><ArrowsClockwise size={18} /> Refresh</button>
+      <button className="task-check-refresh" aria-label="Refresh task submissions" disabled={loading || refreshing} onClick={async () => { setError(""); setRefreshing(true); try { await onRefresh(); setReload((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh submissions."); } finally { setRefreshing(false); } }}><ArrowsClockwise size={18} /> {refreshing ? "Refreshing…" : "Refresh"}</button>
     </div>
     {error && <p className="error" role="alert">{error}</p>}
     {loading && <p className="task-check-note" role="status">Checking submissions…</p>}
@@ -60,7 +68,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
       <div className="task-check-summary">
         <span><strong>{submissions.length}/{state.students.length}</strong> submitted</span>
         <span><strong>{submissions.filter((item) => !item.grade).length}</strong> pending review</span>
-        <span><strong>{flagged.size}</strong> students to compare</span>
+        <span><strong>{loading ? "…" : result ? flagged.size : "—"}</strong> students to compare</span>
       </div>
       <div className="task-check-filters">
         <div role="group" aria-label="Task submission filter">{[["all", "All students"], ["pending", "Pending"], ["similar", "Similar tasks"], ["missing", "Missing"]].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>
@@ -87,7 +95,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
             </tr>;
           })}
         </tbody></table>
-        {!students.length && <p className="teacher-empty">No students match this filter.</p>}
+        {!students.length && <p className="teacher-empty">{filter === "similar" && !result ? loading ? "Comparisons are updating…" : "Comparison unavailable. Refresh to try again." : "No students match this filter."}</p>}
       </div>
     </>}
   </div>;

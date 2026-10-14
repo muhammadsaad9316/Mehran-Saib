@@ -30,10 +30,15 @@ type ParsedFile = {
   kind: "html" | "css" | "js";
   shingles: Map<string, { source: string; count: number }>;
 };
+type FingerprintSummary = {
+  blocks: Map<string, { source: string; count: number }>;
+  total: number;
+};
 type ParsedSubmission = {
   files: ParsedFile[];
   documents: { path: string; $: CheerioAPI; text: string }[];
   quality: Quality[];
+  fingerprintSummaries: Map<ParsedFile["kind"], FingerprintSummary>;
 };
 
 const normalizeText = (value: string) =>
@@ -98,7 +103,7 @@ function shingles(
 }
 
 function inspect(submission: Submission, task: Task): ParsedSubmission {
-  const result: ParsedSubmission = { files: [], documents: [], quality: [] };
+  const result: ParsedSubmission = { files: [], documents: [], quality: [], fingerprintSummaries: new Map() };
   const paths = new Set(
     [...submission.files, ...(submission.assets ?? [])].map((f) =>
       cleanPath(f.path),
@@ -583,14 +588,20 @@ function checkRequirement(
 }
 
 function fingerprints(parsed: ParsedSubmission, kind: ParsedFile["kind"]) {
+  const cached = parsed.fingerprintSummaries.get(kind);
+  if (cached) return cached;
   const result = new Map<string, { source: string; count: number }>();
+  let total = 0;
   for (const file of parsed.files.filter((file) => file.kind === kind)) {
     for (const [signature, block] of file.shingles) {
       const old = result.get(signature);
       result.set(signature, { source: old?.source ?? block.source, count: (old?.count ?? 0) + block.count });
+      total += block.count;
     }
   }
-  return result;
+  const summary = { blocks: result, total };
+  parsed.fingerprintSummaries.set(kind, summary);
+  return summary;
 }
 
 function complete(parsed: ParsedSubmission) {
@@ -606,10 +617,10 @@ function compare(parsed: ParsedSubmission, other: ParsedSubmission) {
   for (const kind of ["html", "css", "js"] as const) {
     const own = fingerprints(parsed, kind);
     const theirs = fingerprints(other, kind);
-    ownTotal += [...own.values()].reduce((sum, block) => sum + block.count, 0);
-    peerTotal += [...theirs.values()].reduce((sum, block) => sum + block.count, 0);
-    for (const [signature, block] of own) {
-      const matched = theirs.get(signature);
+    ownTotal += own.total;
+    peerTotal += theirs.total;
+    for (const [signature, block] of own.blocks) {
+      const matched = theirs.blocks.get(signature);
       if (!matched) continue;
       overlap += Math.min(block.count, matched.count);
       if (!signature.startsWith("short:")) substantialOverlap += Math.min(block.count, matched.count);
