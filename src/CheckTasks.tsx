@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowsClockwise } from "@phosphor-icons/react";
+import {
+  ArrowsClockwise,
+  CheckCircle,
+  Clock,
+  Minus,
+  ArrowRight,
+  PencilSimple,
+} from "@phosphor-icons/react";
 import type { AppState, Submission, TaskAnalysis } from "../shared/types";
 import { byRollNumber } from "../shared/roster";
 import { api } from "./api";
@@ -82,15 +89,140 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
             const analysis = result?.submissions.find((item) => item.submissionId === submission?.id);
             const matches = pairs.filter((pair) => pair.leftId === submission?.id || pair.rightId === submission?.id);
             const best = matches[0];
-            return <tr key={student.id} className={best ? "task-row-flagged" : ""}>
-              <td><strong>Roll {student.rollNumber}</strong><span className="task-student-name">{student.name || "Name not provided"}</span></td>
-              <td>{!submission ? "Missing" : submission.grade ? "Graded" : "To review"}{submission?.late && <span className="task-late">Late</span>}</td>
-              <td>{analysis ? analysis.total ? `${analysis.met}/${analysis.total}` : "No checks set" : submission ? loading ? "Checking…" : "Unavailable" : "—"}</td>
-              <td>{analysis ? analysis.qualityCount ? `${analysis.qualityCount} observations` : "No issues found" : "—"}</td>
-              <td>{best ? <span className="task-match-badge">{best.percentage}% · {matches.length} {matches.length === 1 ? "match" : "matches"}</span> : submission ? loading ? "Checking…" : analysis?.comparable ? `None over ${threshold}%` : "Needs manual review" : "—"}</td>
-              <td>{submission?.grade ? `${submission.grade.marks}/${task.maxMarks}${submission.grade.published ? "" : " · Draft"}` : "—"}</td>
-              <td><div className="task-row-actions">{submission && <button className="teacher-text-button" onClick={() => onReview(submission)}>Review</button>}{best && <button className="task-compare-button" onClick={() => setComparison([best.leftId, best.rightId])}>Compare</button>}</div>
-                {matches.length > 1 && <details className="task-other-matches"><summary>All matches</summary>{matches.map((pair) => { const peer = submissions.find((item) => item.id === (pair.leftId === submission?.id ? pair.rightId : pair.leftId)); const user = state.students.find((item) => item.id === peer?.studentId); return <button key={`${pair.leftId}-${pair.rightId}`} onClick={() => setComparison([pair.leftId, pair.rightId])}>Roll {user?.rollNumber} · {pair.percentage}%</button>; })}</details>}
+            const isGraded = Boolean(submission?.grade);
+            const isPending = Boolean(submission && !submission.grade);
+            const isMissing = !submission;
+
+            const rowClass = [
+              best ? "task-row-flagged" : "",
+              isGraded ? "task-row-graded" : "",
+              isPending ? "task-row-pending" : "",
+              isMissing ? "task-row-missing" : "",
+            ].filter(Boolean).join(" ");
+
+            return <tr key={student.id} className={rowClass}>
+              <td>
+                <div className="task-student-cell">
+                  <strong>Roll {student.rollNumber}</strong>
+                  <span className="task-student-name">{student.name || "Name not provided"}</span>
+                </div>
+              </td>
+              <td>
+                <div className="task-status-cell">
+                  {isMissing ? (
+                    <span className="task-status-badge status-missing">
+                      <Minus size={13} weight="bold" /> Missing
+                    </span>
+                  ) : isGraded ? (
+                    <span className="task-status-badge status-graded">
+                      <CheckCircle size={14} weight="fill" /> Graded
+                    </span>
+                  ) : (
+                    <span className="task-status-badge status-pending">
+                      <Clock size={14} weight="bold" /> To review
+                    </span>
+                  )}
+                  {submission?.late && <span className="task-late">Late</span>}
+                </div>
+              </td>
+              <td>
+                {analysis ? (
+                  analysis.total ? (
+                    <span className={`task-req-badge ${analysis.met === analysis.total ? "req-all-met" : "req-partial"}`}>
+                      {analysis.met}/{analysis.total} met
+                    </span>
+                  ) : (
+                    "No checks set"
+                  )
+                ) : submission ? (
+                  loading ? "Checking…" : "Unavailable"
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {analysis ? (
+                  analysis.qualityCount ? (
+                    <span className="task-quality-badge">{analysis.qualityCount} observations</span>
+                  ) : (
+                    <span className="task-quality-clean">Clean</span>
+                  )
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {best ? (
+                  <span className="task-match-badge">{best.percentage}% · {matches.length} {matches.length === 1 ? "match" : "matches"}</span>
+                ) : submission ? (
+                  loading ? "Checking…" : analysis?.comparable ? `None over ${threshold}%` : "Needs manual review"
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {isGraded && submission?.grade ? (
+                  <span className="task-score-pill">
+                    <strong>{submission.grade.marks}</strong>
+                    <small>/{task.maxMarks}</small>
+                    {submission.grade.published ? "" : <span className="task-draft-badge">Draft</span>}
+                  </span>
+                ) : isPending ? (
+                  <span className="task-score-pending">Needs score</span>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                <div className="task-row-actions">
+                  {isPending && submission && (
+                    <button
+                      className="task-action-btn task-action-grade"
+                      onClick={() => onReview(submission)}
+                      title="Grade this student"
+                    >
+                      Grade <ArrowRight size={13} weight="bold" />
+                    </button>
+                  )}
+                  {isGraded && submission && (
+                    <button
+                      className="task-action-btn task-action-edit"
+                      onClick={() => onReview(submission)}
+                      title="View or modify saved grade"
+                    >
+                      <PencilSimple size={13} /> Edit grade
+                    </button>
+                  )}
+                  {best && (
+                    <button
+                      className="task-compare-button"
+                      onClick={() => setComparison([best.leftId, best.rightId])}
+                    >
+                      Compare
+                    </button>
+                  )}
+                </div>
+                {matches.length > 1 && (
+                  <details className="task-other-matches">
+                    <summary>All matches</summary>
+                    {matches.map((pair) => {
+                      const peer = submissions.find(
+                        (item) =>
+                          item.id ===
+                          (pair.leftId === submission?.id ? pair.rightId : pair.leftId),
+                      );
+                      const user = state.students.find((item) => item.id === peer?.studentId);
+                      return (
+                        <button
+                          key={`${pair.leftId}-${pair.rightId}`}
+                          onClick={() => setComparison([pair.leftId, pair.rightId])}
+                        >
+                          Roll {user?.rollNumber} · {pair.percentage}%
+                        </button>
+                      );
+                    })}
+                  </details>
+                )}
               </td>
             </tr>;
           })}
