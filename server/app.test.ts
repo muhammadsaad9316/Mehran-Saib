@@ -153,7 +153,7 @@ test("instruction generation requires teacher access and returns reviewable draf
   assert.equal(response.body.tasks.length, 1);
   assert.ok(
     response.body.tasks[0].requirements.some(
-      (rule: { value: string }) => rule.value === "lab.html",
+      (rule: { value: string }) => rule.value === "*.html",
     ),
   );
   assert.match(response.body.notice, /review/i);
@@ -460,6 +460,26 @@ test("CSV matches the lab marks sheet and escapes potential spreadsheet formulas
   assert.match(printable.text, /Subject: Web Engineering/);
   await student.get("/api/reports/print?labId=lab2").expect(403);
   await teacher.get("/api/reports.csv?labId=unknown").expect(404);
+});
+
+test("Excel marks sheets are teacher-only attachments and reject unknown labs", async () => {
+  const workbook = await teacher.get("/api/reports.xlsx?labId=lab2")
+    .buffer(true)
+    .parse((res, callback) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => callback(null, Buffer.concat(chunks)));
+      res.on("error", callback);
+    })
+    .expect(200);
+  assert.match(workbook.headers["content-type"], /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(workbook.headers["content-disposition"], /lab-2-marks-sheet-fall-2026\.xlsx/);
+  assert.equal(workbook.headers["cache-control"], "no-store");
+  assert.ok(Buffer.isBuffer(workbook.body));
+  assert.equal(workbook.body.subarray(0, 2).toString(), "PK");
+  await student.get("/api/reports.xlsx?labId=lab2").expect(403);
+  await request(app).get("/api/reports.xlsx?labId=lab2").expect(401);
+  await teacher.get("/api/reports.xlsx?labId=unknown").expect(404);
 });
 
 test("legacy demo names migrate without changing accounts, sessions, submissions or later name edits", async () => {

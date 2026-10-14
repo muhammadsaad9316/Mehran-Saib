@@ -1,17 +1,20 @@
 :root {
-  --workspace-paper: #f7f5f0;
-  --workspace-sheet: #fffefa;
-  --workspace-ink: #252a27;
-  --workspace-muted: #656b65;
-  --workspace-edge: #deded5;
-  --workspace-control: #f2f1eb;
-  --workspace-accent: #bc5c34;
-  --workspace-action: #a64e2d;
-  --workspace-focus: #9c4527;
+  --workspace-paper: #f8fafc;
+  --workspace-sheet: #ffffff;
+  --workspace-ink: #0f172a;
+  --workspace-muted: #64748b;
+  --workspace-edge: #e2e8f0;
+  --workspace-control: #f1f5f9;
+  --workspace-accent: #f97316;
+  --workspace-action: #c2410c;
+  --workspace-action-hover: #9a3412;
+  --workspace-focus: #ea580c;
+  --workspace-tint: #fff7ed;
+  --workspace-tint-edge: #fed7aa;
   --workspace-mono: "IBM Plex Mono", monospace;
   --workspace-ease: cubic-bezier(0.23, 1, 0.32, 1);
-  --brand-accent: #a64e2d;
-  --brand-window: #f7f5f0;
+  --brand-accent: var(--workspace-accent);
+  --brand-window: var(--workspace-sheet);
 }
 
 .brand-logo { display: inline-flex; align-items: center; gap: 10px; font-family: "Manrope Variable", sans-serif; font-size: var(--brand-size, 24px); font-weight: 800; line-height: 1.1; letter-spacing: -1.2px; white-space: nowrap; }
@@ -22,7 +25,7 @@
 .loading-brand { --brand-size: 28px; }
 .loading-brand .brand-logo-icon { width: 48px; height: 37px; }
 
-/* Entry screens share the quiet paper and graphite of the classroom workspace. */
+/* Quordix-inspired white, orange and ink across the classroom workspace. */
 .login-page,
 .loading-screen {
   color: var(--workspace-ink);
@@ -31,22 +34,32 @@
   -webkit-font-smoothing: antialiased;
 }
 .login-page {
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
   align-items: stretch;
-  gap: clamp(40px, 5vw, 80px);
-  padding: 24px;
+  gap: clamp(24px, 4vw, 56px);
+  padding: clamp(14px, 2.5vh, 28px);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .login-brand {
-  --brand-accent: #e6a180;
-  --brand-window: #252a27;
-  --brand-size: 30px;
-  min-height: calc(100dvh - 48px);
+  --brand-window: var(--workspace-sheet);
+  --brand-size: 28px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   justify-content: space-between;
-  padding: clamp(32px, 4vw, 56px);
-  gap: 48px;
-  background: var(--workspace-ink);
+  padding: clamp(22px, 3.4vh, 42px) clamp(28px, 4vw, 48px);
+  gap: clamp(14px, 2vh, 28px);
+  background-color: var(--workspace-sheet);
+  background-image: radial-gradient(#94a3b82e 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1px solid var(--workspace-edge);
   border-radius: 16px;
-  color: var(--workspace-paper);
+  color: var(--workspace-ink);
+  overflow: hidden;
 }
 .login-brand .brand {
   display: flex;
@@ -54,67 +67,80 @@
   gap: 12px;
   color: inherit;
   font-family: "Manrope Variable", sans-serif;
-  font-size: 27px;
+  font-size: 24px;
   font-weight: 750;
-  letter-spacing: -1.2px;
+  letter-spacing: -1px;
+  flex-shrink: 0;
 }
-.login-brand .brand-logo-icon { width: 52px; height: 40px; }
+.login-brand .brand-logo-icon { width: 44px; height: 34px; }
 .login-brand .eyebrow {
-  color: #b8bcb5;
+  color: var(--workspace-action);
   font-family: var(--workspace-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.4px;
 }
+.login-brand-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  flex: 1;
+}
 .login-brand h1 {
-  margin: 24px 0;
-  color: var(--workspace-paper);
+  margin: clamp(10px, 1.6vh, 18px) 0;
+  color: var(--workspace-ink);
   font-family: "Manrope Variable", sans-serif;
-  font-size: clamp(48px, 5.8vw, 84px);
-  font-weight: 600;
-  line-height: 1.04;
-  letter-spacing: -.055em;
+  font-size: clamp(38px, 5.2vh, 58px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -.045em;
 }
 .login-brand p {
-  color: #c6c9c2;
+  color: var(--workspace-muted);
   font-size: 14px;
-  line-height: 1.75;
-  max-width: 350px;
+  line-height: 1.55;
+  max-width: 380px;
 }
 .login-specimen {
-  max-width: 430px;
-  margin-top: 40px;
+  max-width: 440px;
+  margin-top: clamp(14px, 2.2vh, 26px);
   font-family: var(--workspace-mono);
   font-size: 12px;
-  line-height: 1.85;
+  line-height: 1.65;
+  padding: 16px 18px;
+  border: 1px solid var(--workspace-tint-edge);
+  border-radius: 12px;
+  background: var(--workspace-tint);
 }
 .login-specimen-header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ffffff26;
-  color: #b6bbb3;
-  font-size: 9px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--workspace-tint-edge);
+  color: var(--workspace-action);
+  font-size: 10px;
   letter-spacing: .8px;
 }
-.login-code-line { display: flex; gap: 24px; }
-.login-code-line > span { color: #8f988d; font-size: 10px; }
-.login-code-line code { color: #d3d7cf; font: inherit; }
-.login-code-line em { color: #e4a284; font-style: normal; }
-.login-code-cursor { color: #e4a284; }
+.login-code-line { display: flex; gap: 20px; }
+.login-code-line > span { color: var(--workspace-muted); font-size: 11px; }
+.login-code-line code { color: var(--workspace-ink); font: inherit; }
+.login-code-line em { color: var(--workspace-action); font-style: normal; }
+.login-code-cursor { color: var(--workspace-action); }
 .login-brand-footer {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 24px;
-  color: #bbc0b7;
+  gap: 20px;
+  color: var(--workspace-muted);
   font-size: 11px;
-  line-height: 1.75;
+  line-height: 1.5;
+  flex-shrink: 0;
 }
 .login-brand-footer > span:last-child {
   font-family: var(--workspace-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 1px;
   text-align: right;
 }
@@ -123,96 +149,120 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 40px;
-  padding: 32px 32px 32px 0;
+  gap: clamp(12px, 2vh, 24px);
+  padding: clamp(14px, 2.5vh, 32px) clamp(16px, 2.5vw, 36px) clamp(14px, 2.5vh, 32px) 0;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.login-access::-webkit-scrollbar { display: none; }
 .login-form {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  min-height: 0;
 }
 .login-form .eyebrow {
   color: var(--workspace-action);
-  font-size: 10px;
-  letter-spacing: 1.2px;
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  font-weight: 600;
 }
 .login-form h2 {
-  margin: 16px 0 8px;
+  margin: clamp(6px, 1vh, 12px) 0 4px;
   font-family: "Manrope Variable", sans-serif;
-  font-size: 38px;
+  font-size: clamp(30px, 4.2vh, 40px);
   font-weight: 650;
-  letter-spacing: -1.7px;
-  line-height: 1.2;
+  letter-spacing: -1.4px;
+  line-height: 1.15;
   color: var(--workspace-ink);
 }
-.login-form > p { margin-bottom: 36px; color: var(--workspace-muted); font-size: 14px; }
-.login-form .field { color: var(--workspace-ink); font-size: 12px; font-weight: 600; margin-bottom: 20px; }
+.login-form > p {
+  margin-bottom: clamp(14px, 2.4vh, 26px);
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.login-form .field {
+  color: var(--workspace-ink);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: clamp(10px, 1.6vh, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .login-form .field input {
-  height: 48px;
+  height: 46px;
   border: 1px solid var(--workspace-edge);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 9px;
+  padding: 10px 14px;
   background: var(--workspace-sheet);
   color: var(--workspace-ink);
   font-size: 14px;
   box-shadow: none;
 }
-.login-form .field input::placeholder { color: #7b8078; font-size: 13px; }
+.login-form .field input::placeholder { color: var(--workspace-muted); font-size: 13.5px; }
 .login-form .btn,
 .loading-screen .btn {
-  min-height: 48px;
-  padding: 12px 16px;
+  min-height: 46px;
+  padding: 10px 18px;
   border: 1px solid var(--workspace-edge);
-  border-radius: 8px;
+  border-radius: 9px;
   color: var(--workspace-ink);
   background: var(--workspace-sheet);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 600;
   transition: background 160ms var(--workspace-ease), transform 160ms var(--workspace-ease);
 }
 .login-form .btn:hover { background: var(--workspace-control); }
 .login-form .btn-primary,
 .loading-screen .btn-primary {
   justify-content: space-between;
-  color: #fff;
-  background: var(--workspace-action);
-  border-color: var(--workspace-action);
+  color: var(--workspace-ink);
+  background: var(--workspace-accent);
+  border-color: var(--workspace-accent);
 }
 .login-form .btn-primary:hover,
-.loading-screen .btn-primary:hover { background: #8f4024; }
+.loading-screen .btn-primary:hover { background: var(--workspace-focus); }
 .login-submit-icon { display: grid; place-items: center; background: none; color: inherit; }
 .login-form .btn:active { transform: scale(.99); }
-.login-form .error { margin: 16px 0 0; color: #963e30; font-size: 13px; }
-.login-form .demo-login { margin-top: 28px; padding-top: 24px; border-color: var(--workspace-edge); gap: 8px; }
-.demo-login > span { margin: 0; text-align: left; font-size: 13px; font-weight: 600; color: var(--workspace-ink); }
-.demo-login > p { margin: 0 0 8px; color: var(--workspace-muted); font-size: 12px; }
-.login-form .demo-login .btn { min-height: 64px; gap: 12px; justify-content: flex-start; padding: 12px 14px; }
+.login-form .error { margin: 10px 0 0; color: #963e30; font-size: 13px; }
+.login-form .demo-login { margin-top: clamp(10px, 1.6vh, 18px); padding-top: clamp(8px, 1.4vh, 14px); border-color: var(--workspace-edge); gap: 8px; }
+.demo-login > span { margin: 0; text-align: left; font-size: 12px; font-weight: 600; color: var(--workspace-ink); }
+.demo-login > p { margin: 0 0 6px; color: var(--workspace-muted); font-size: 12px; }
+.login-form .demo-login .btn { min-height: 48px; gap: 12px; justify-content: flex-start; padding: 8px 14px; }
 .demo-login .btn > span { flex: 1; text-align: left; }
-.demo-login .btn small { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
-.demo-login .btn > svg { flex-shrink: 0; color: var(--workspace-muted); }
-.login-access-note { display: flex; align-items: center; gap: 8px; color: var(--workspace-muted); font-size: 11px; }
+.demo-login .btn small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
+.demo-login .btn > svg { flex-shrink: 0; color: var(--workspace-muted); width: 18px; height: 18px; }
+.login-access-note { display: flex; align-items: center; gap: 8px; color: var(--workspace-muted); font-size: 11.5px; flex-shrink: 0; }
 .loading-screen { min-height: 100dvh; height: auto; padding: 48px 24px; gap: 32px; text-align: center; }
 .loading-brand { display: flex; align-items: center; gap: 12px; font-family: "Manrope Variable", sans-serif; font-size: 26px; font-weight: 750; letter-spacing: -1px; }
 .loading-content { max-width: 480px; }
 .loading-content .eyebrow { color: var(--workspace-action); font-size: 9px; letter-spacing: 1.5px; }
 .loading-content h1 { margin: 20px 0 12px; font-family: "Manrope Variable", sans-serif; font-size: 34px; line-height: 1.3; letter-spacing: -1.2px; text-wrap: balance; }
 .loading-content p { color: var(--workspace-muted); font-size: 13px; }
+.loading-screen > p { color: var(--workspace-muted); }
 .loading-progress { display: block; width: 160px; height: 3px; margin: 28px auto 0; overflow: hidden; border-radius: 4px; background: var(--workspace-edge); }
 .loading-progress > span { display: block; width: 45%; height: 100%; background: var(--workspace-accent); animation: workspace-loading 1.5s var(--workspace-ease) infinite; }
 .loading-caption { color: var(--workspace-muted); font-size: 11px; }
 
 /* Keep review, grading and editing on the same restrained paper system. */
-.teacher-minimal .modal-overlay { background: #252a2770; backdrop-filter: blur(6px); }
+.teacher-minimal .modal-overlay { background: #0f172a70; backdrop-filter: blur(6px); }
 .teacher-minimal .modal {
   border: 1px solid var(--teacher-edge);
   border-radius: 16px;
   background: var(--teacher-sheet);
   color: var(--teacher-ink);
   font-family: "DM Sans", sans-serif;
-  box-shadow: 0 24px 80px #252a2726;
+  box-shadow: 0 24px 80px #0f172a26;
   animation: modal-enter 200ms var(--workspace-ease) both;
 }
 .teacher-minimal .modal :is(h2, h3, h4) { font-family: "Manrope Variable", sans-serif; letter-spacing: -.5px; }
@@ -237,8 +287,8 @@
 .teacher-minimal .modal .field :is(input, textarea)::placeholder { color: var(--teacher-pencil); }
 .teacher-minimal .modal .btn { min-height: 44px; border: 1px solid var(--teacher-edge); border-radius: 8px; box-shadow: none; background: var(--teacher-sheet); color: var(--teacher-ink); font-size: 12px; transition: background 160ms var(--workspace-ease), transform 160ms var(--workspace-ease); }
 .teacher-minimal .modal .btn:hover { background: var(--teacher-control); }
-.teacher-minimal .modal .btn-primary { background: var(--workspace-action); border-color: var(--workspace-action); color: #fff; }
-.teacher-minimal .modal .btn-primary:hover { background: #8f4024; }
+.teacher-minimal .modal .btn-primary { background: var(--workspace-accent); border-color: var(--workspace-accent); color: var(--workspace-ink); }
+.teacher-minimal .modal .btn-primary:hover { background: var(--workspace-focus); }
 .teacher-minimal .modal :is(.muted, .check-field, .preview-security, .submission-facts span, .grading-panel > p, .requirement-list p, .analysis-summary, .student-history p, .history-row small, .task-description) { color: var(--teacher-muted); font-size: 12px; }
 .teacher-minimal .modal :is(.submission-facts strong, .requirement-list strong, .quality-item strong, .history-row strong) { color: var(--teacher-ink); font-size: 12px; }
 .teacher-minimal .modal .tabs { gap: 24px; padding: 0 24px; }
@@ -249,44 +299,66 @@
 .teacher-minimal .modal .source pre { background: var(--teacher-sheet); color: var(--teacher-ink); font-family: var(--workspace-mono); font-size: 12px; }
 .teacher-minimal .modal .line-number { color: var(--teacher-pencil); }
 .teacher-minimal .modal .code-view aside :is(button, a) { min-height: 40px; color: var(--teacher-muted); font-size: 12px; }
-.teacher-minimal .modal .code-view aside button.active { color: var(--workspace-action); background: #bc5c3414; }
+.teacher-minimal .modal .code-view aside button.active { color: var(--workspace-action); background: var(--workspace-tint); }
 .teacher-minimal .modal .analysis-metrics strong { color: var(--teacher-ink); font-size: 32px; }
 .teacher-minimal .modal .analysis-metrics small { color: var(--teacher-muted); }
 .teacher-minimal .modal .marks-input { border: 1px solid var(--teacher-edge); border-radius: 8px; box-shadow: none; background: var(--teacher-sheet); }
 .teacher-minimal .modal .marks-input input { box-shadow: none; }
 .teacher-minimal .modal .check-field { min-height: 44px; }
 .teacher-minimal .modal .check-field input { width: 18px; height: 18px; accent-color: var(--workspace-action); }
-.teacher-minimal .modal .quality-item { background: #f4ecdb; color: #79602f; }
-.teacher-minimal .modal .quality-item p { color: #79602f; font-size: 12px; }
+.teacher-minimal .modal .quality-item { background: var(--workspace-tint); color: var(--workspace-action); }
+.teacher-minimal .modal .quality-item p { color: var(--workspace-action); font-size: 12px; }
 .teacher-minimal .modal .matching-evidence pre { color: var(--teacher-ink); font-family: var(--workspace-mono); font-size: 11px; }
 .teacher-minimal .modal .student-score { color: var(--workspace-action); }
 .teacher-minimal .modal .student-score small { color: var(--teacher-muted); }
 .teacher-minimal .modal .upload-zone { padding: 28px 16px; background: var(--teacher-control); border-color: var(--teacher-edge); color: var(--workspace-action); }
-.teacher-minimal .modal .upload-zone.dragging { background: #bc5c3414; border-color: var(--workspace-action); }
+.teacher-minimal .modal .upload-zone.dragging { background: var(--workspace-tint); border-color: var(--workspace-action); }
 .teacher-minimal .modal .upload-zone strong { color: var(--teacher-ink); font-size: 15px; }
 .teacher-minimal .modal .upload-zone p { color: var(--teacher-muted); font-size: 12px; }
 .teacher-minimal .modal .optional-link summary { min-height: 44px; padding-block: 12px; color: var(--teacher-ink); font-size: 12px; cursor: pointer; }
 .teacher-minimal .modal .selected-files :is(div, small) { color: var(--teacher-muted); font-size: 12px; }
 .teacher-minimal .modal .selected-files > div { border-color: var(--teacher-edge); }
-.teacher-minimal .modal .warning-note { background: #f4ecdb; border-color: #e1d4b9; color: #79602f; font-size: 12px; }
+.teacher-minimal .modal .warning-note { background: var(--workspace-tint); border-color: var(--workspace-tint-edge); color: var(--workspace-action); font-size: 12px; }
 .teacher-minimal .modal .error { background: #faeeea; border-color: #e9c9bc; color: #963e30; font-size: 12px; }
-.teacher-minimal .modal .success { background: #eaf0e5; color: #476443; font-size: 12px; }
-.teacher-minimal .toast { background: var(--teacher-graphite); border-radius: 10px; box-shadow: 0 8px 24px #252a2726; font-size: 13px; padding: 14px 20px; }
+.teacher-minimal .modal .success { background: #f0fdf4; color: #166534; font-size: 12px; }
+.teacher-minimal .toast { background: var(--teacher-graphite); border-radius: 10px; box-shadow: 0 8px 24px #0f172a26; font-size: 13px; padding: 14px 20px; }
 .teacher-minimal .toast svg { color: #bbcfb0; flex-shrink: 0; }
 .login-page :is(button, input):focus-visible,
 .loading-screen button:focus-visible,
 .teacher-minimal .modal :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: 3px; }
 .login-page input:focus { outline: 2px solid var(--workspace-focus); outline-offset: 2px; }
 
+/* Shared review details still inherit the original base stylesheet. */
+.teacher-minimal :is(.muted, .eyebrow, .task-description, .guide-row p, .history-row small, .similarity-row, .marks-input span, .empty-state) { color: var(--workspace-muted); }
+.teacher-minimal :is(.empty-state h3, .history-row > strong, .student-name-button) { color: var(--workspace-ink); }
+.teacher-minimal :is(.text-button, .review-link, .guide-row svg) { color: var(--workspace-action); }
+.teacher-minimal .avatar { background: var(--workspace-control); color: var(--workspace-muted); }
+.teacher-minimal .similarity-track { background: var(--workspace-edge); }
+.teacher-minimal .similarity-track i { background: var(--workspace-accent); }
+.teacher-minimal .pill { color: var(--workspace-action); background: var(--workspace-tint); border-color: var(--workspace-tint-edge); }
+.teacher-minimal .badge { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+.teacher-minimal :is(.badge.submitted, .badge.missing, .badge.late) { color: var(--workspace-action); background: var(--workspace-tint); border-color: var(--workspace-tint-edge); }
+.teacher-minimal :is(.badge.closed, .badge.draft) { color: var(--workspace-muted); background: var(--workspace-control); border-color: var(--workspace-edge); }
+.teacher-minimal .badge.active { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+.teacher-minimal .teacher-lab-state.published { color: #166534; background: #f0fdf4; }
+.teacher-minimal .teacher-review-next:hover { background: #ea580c; }
+
 @keyframes workspace-loading { from { transform: translateX(-110%); } to { transform: translateX(330%); } }
 @media (max-width: 900px) {
-  .login-page { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 16px; }
-  .login-brand { min-height: auto; padding: 32px; gap: 32px; }
-  .login-brand h1 { font-size: 56px; margin-block: 16px; }
+  .login-page {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    gap: 0;
+    padding: 16px;
+  }
+  .login-brand { min-height: auto; height: auto; max-height: none; padding: 24px; gap: 20px; }
+  .login-brand h1 { font-size: 38px; margin-block: 12px; }
   .login-brand h1 br { display: none; }
   .login-specimen { display: none; }
   .login-brand-footer > span:last-child { display: none; }
-  .login-access { padding: 48px 24px 24px; gap: 32px; }
+  .login-access { padding: 32px 16px 20px; gap: 24px; height: auto; max-height: none; }
 }
 @media (max-width: 480px) {
   .login-page { padding: 12px; }

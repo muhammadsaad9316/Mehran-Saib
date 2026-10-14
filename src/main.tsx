@@ -13,6 +13,7 @@ import "./styles.css";
 import "./teacher.css";
 import "./student.css";
 import "./polish.css";
+import "./review.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <WorkspaceBoundary><App /></WorkspaceBoundary>

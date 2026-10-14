@@ -26,6 +26,41 @@ function submission(id: string, path: string, content: string): Submission {
   };
 }
 
+test("HTML filename checks accept renamed pages in single and batch analysis, while other filenames remain exact", () => {
+  const rules: Task = { ...task, requirements: [
+    { id: "page", label: "index.html included", type: "file", value: "index.html" },
+    { id: "css", label: "Stylesheet included", type: "file", value: "style.css" },
+  ] };
+  for (const path of ["T1.html", "task folder/T1.HTML", "solution.htm"]) {
+    const own = submission("a", path, "<h1>My task</h1>");
+    const result = analyzeSubmission(own, [], rules);
+    assert.equal(result.met, 1);
+    assert.equal(result.requirements[0].label, "HTML page uploaded (any filename)");
+    assert.ok(result.requirements[0].detail.includes(path));
+    assert.equal(result.requirements[1].passed, false);
+    assert.match(result.requirements[1].detail, /style\.css/);
+    assert.equal(analyzeTaskSubmissions([own], rules).submissions[0].met, result.met);
+  }
+  assert.equal(rules.requirements[0].value, "index.html");
+  for (const own of [submission("a", "style.css", "body{}"), { ...submission("a", "notes.txt", "My task"), assets: [{ path: "index.html", mimeType: "image/png" }] }]) {
+    const result = analyzeSubmission(own, [], rules);
+    assert.equal(result.requirements[0].passed, false);
+    assert.match(result.requirements[0].detail, /Any \.html or \.htm filename/);
+  }
+});
+
+test("page text respects block boundaries and br without splitting words around inline tags", () => {
+  const result = analyzeSubmission(submission("a", "T1.html", '<html><head><title>Course title</title></head><body><p>Web Eng<strong>ineering</strong><br>Semester 7</p><p>Hello</p>world<script>Hidden text</script></body></html>'), [], {
+    ...task,
+    requirements: [
+      { id: "break", label: "Course and semester", type: "text", value: "Web Engineering Semester 7" },
+      { id: "blocks", label: "Adjacent blocks", type: "text", value: "Hello world" },
+      { id: "hidden", label: "Script content", type: "text", value: "Hidden text" },
+    ],
+  });
+  assert.deepEqual(result.requirements.map(rule => rule.passed), [true, true, false]);
+});
+
 test("comments cannot fulfill element or visible text requirements", () => {
   const result = analyzeSubmission(
     submission(

@@ -1,8 +1,8 @@
 .student-portal {
-  --student-submitted-surface: #f7ece4;
-  --student-submitted-ink: #96502f;
-  --student-graded-surface: #ecf1e9;
-  --student-graded-ink: #52674a;
+  --student-submitted-surface: var(--workspace-tint);
+  --student-submitted-ink: var(--workspace-action);
+  --student-graded-surface: #f0fdf4;
+  --student-graded-ink: #166534;
 }
 .student-shell .teacher-main:focus {
   outline: none;
@@ -275,7 +275,7 @@
 .student-track-title { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .student-track-title svg { flex-shrink: 0; width: 16px; height: 16px; }
 .student-task-track > button small { font-size: 11px; font-weight: 500; line-height: 1.4; }
-.student-task-track > .to-submit { border-color: #d9b19e; background: #fff6f0; color: var(--teacher-action); }
+.student-task-track > .to-submit { border-color: var(--workspace-tint-edge); background: var(--workspace-tint); color: var(--teacher-action); }
 .student-task-track > button:hover { border-color: currentColor; transform: translateY(-2px); }
 .student-task-track > button:active { transform: translateY(0); }
 .student-task-track > button:focus-visible { outline: 2px solid var(--teacher-focus); outline-offset: 3px; }
@@ -633,12 +633,12 @@
   box-shadow: none;
 }
 .student-portal .btn-primary {
-  color: #fff;
-  background: var(--teacher-action);
-  border-color: var(--teacher-action);
+  color: var(--teacher-ink);
+  background: var(--teacher-accent);
+  border-color: var(--teacher-accent);
 }
 .student-portal .btn-primary:hover {
-  background: var(--teacher-action-hover);
+  background: var(--teacher-focus);
 }
 .student-portal .field input,
 .student-portal .field select,

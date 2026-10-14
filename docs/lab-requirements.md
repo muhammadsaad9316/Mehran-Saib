@@ -6,6 +6,8 @@ Repository copies: [Lab 1 DOCX](<../server/fixtures/Web Engineering.docx>) and [
 
 These notes describe assignment requirements and teacher review recommendations. Current parser behavior and limits, including checks across the submitted task's HTML files, are documented in [analysis.md](analysis.md); preview entrypoint selection is not a backend analysis filter. See the [documentation index](README.md) for application development guides.
 
+Classroom override, 14 October 2026: the teacher permits any `.html` or `.htm` filename in every task. The Lab 1 filenames below record the original document wording; they are not enforced. Suggested file checks and application defaults use a generic HTML page requirement, and existing named HTML checks follow the same policy during analysis.
+
 ## Rule conventions
 
 Suggested rule objects use `{ id, label, type, value, attribute? }`:
@@ -13,7 +15,7 @@ Suggested rule objects use `{ id, label, type, value, attribute? }`:
 - `tag`: `value` is a CSS selector evaluated on a parsed HTML tree. Check actual elements, not tag names inside comments or strings. Selectors can express exact attributes such as `body[bgcolor="lightgray"]`.
 - `attribute`: `value` is a CSS selector, and `attribute` is a nonempty attribute to inspect on matching elements.
 - `text`: `value` is required text in parsed page content, including the title but excluding comments, scripts, and styles. Normalize case and whitespace. This cannot verify which element wraps the text, whether it is visibly rendered, or whether it is specifically the document title.
-- `file`: `value` is a required basename, allowing the file inside a task subfolder. Match case according to the configured filename policy.
+- `file`: HTML filenames or `*.html` require any uploaded HTML/HTM source page. Other values are case-insensitive path/basename patterns with `*` support, allowing files inside task subfolders.
 
 The teacher should review and edit these rules before publishing. Check the selected HTML entrypoint for that task; do not let a different task's file satisfy its requirements. Counts, doctype, precise text wrapping, source comments, original character-entity syntax, semantic content, and rendered behavior need additional checks or teacher review. A tag's presence should be labelled as presence, rather than claimed as a complete semantic requirement.
 
@@ -25,7 +27,7 @@ Create `lab1.html` using the standard HTML5 doctype and `html`, `head`, and `bod
 
 ```json
 [
-  { "id": "l1t1-file", "label": "lab1.html included", "type": "file", "value": "lab1.html" },
+  { "id": "l1t1-file", "label": "HTML page uploaded (any filename)", "type": "file", "value": "*.html" },
   { "id": "l1t1-title", "label": "Page title element present", "type": "tag", "value": "head > title" },
   { "id": "l1t1-charset", "label": "UTF-8 metadata present", "type": "tag", "value": "head meta[charset=\"utf-8\" i]" },
   { "id": "l1t1-author", "label": "Author metadata has content", "type": "attribute", "value": "head meta[name=\"author\" i]", "attribute": "content" },
@@ -46,7 +48,7 @@ Create `lab2.html`. Display all six heading levels from `h1` to `h6`. Include th
 
 ```json
 [
-  { "id": "l1t2-file", "label": "lab2.html included", "type": "file", "value": "lab2.html" },
+  { "id": "l1t2-file", "label": "HTML page uploaded (any filename)", "type": "file", "value": "*.html" },
   { "id": "l1t2-h1", "label": "Heading level 1 present", "type": "tag", "value": "body h1" },
   { "id": "l1t2-h2", "label": "Heading level 2 present", "type": "tag", "value": "body h2" },
   { "id": "l1t2-h3", "label": "Heading level 3 present", "type": "tag", "value": "body h3" },
@@ -74,7 +76,7 @@ The practice paragraph states that Web Engineering teaches modern web applicatio
 
 ```json
 [
-  { "id": "l1t3-file", "label": "lab3_essay.html included", "type": "file", "value": "lab3_essay.html" },
+  { "id": "l1t3-file", "label": "HTML page uploaded (any filename)", "type": "file", "value": "*.html" },
   { "id": "l1t3-title", "label": "Page title element present", "type": "tag", "value": "head > title" },
   { "id": "l1t3-bg", "label": "Body background is gray", "type": "tag", "value": "body[bgcolor=\"gray\" i]" },
   { "id": "l1t3-color", "label": "Body text is blue", "type": "tag", "value": "body[text=\"blue\" i]" },

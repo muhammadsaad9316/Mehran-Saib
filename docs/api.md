@@ -23,6 +23,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `GET /api/submissions/:id/analysis?peerId=...` | Teacher or owning student in a published lab | Optional targeted peer ID | 200 `AnalysisResult`; students receive no peers |
 | `GET /api/submissions/:id/files/*filename` | Teacher or owning student in a published lab | Encoded relative file path | 200 attachment bytes |
 | `GET /api/reports.csv?labId=...` | Teacher | Optional lab ID; first lab by default | 200 CSV attachment |
+| `GET /api/reports.xlsx?labId=...` | Teacher | Optional lab ID; first lab by default | 200 styled Excel workbook attachment |
 | `GET /api/reports/print?labId=...` | Teacher | Optional lab ID; first lab by default | 200 printable HTML |
 
 There are no delete, registration, reset-password, student-update or separate lab/submission-list endpoints. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
@@ -124,7 +125,7 @@ Marks must be finite and within `0..task.maxMarks`; zero is a valid grade. Feedb
 
 `TaskAnalysis` contains task ID, per-submission revision/requirements/quality summary, sorted pairs with both coverage percentages and `comparable`, and scan notices. `AnalysisResult` contains detailed requirement results, `met`/`total`, quality, summary and similarities with up to three sample matching blocks. A returned positive pair is not necessarily eligible for a UI flag. See [analysis](analysis.md).
 
-Downloads check ownership, encode path segments, set attachment disposition and `nosniff`. Reports use roll-number order and four columns. A lab total is blank until every task has a saved grade; draft grades count for teacher reports. HTML is escaped and CSV formula prefixes are protected. Report headings are currently fixed to Fall 2026, BS Computer Science, Semester 7th, Web Engineering and the reference college.
+Downloads check ownership, encode path segments, set attachment disposition and `nosniff`. Reports use roll-number order and four columns. A lab total is blank until every task has a saved grade; draft grades count for teacher reports. HTML is escaped and CSV formula prefixes are protected. Excel exports store names as literal text and marks as numbers, with merged titles, wide wrapped columns, orange table headings, alternating rows, frozen headings and filters. A4 printing fits the columns to the page width, repeats the headings and allows multiple pages to keep text legible. Report headings are currently fixed to Fall 2026, BS Computer Science, Semester 7th, Web Engineering and the reference college.
 
 ## Error contract
 

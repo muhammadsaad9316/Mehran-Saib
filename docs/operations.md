@@ -47,7 +47,7 @@ In an isolated environment:
 3. Upload nested HTML/CSS/JS plus a raster image or ZIP; preview linked pages and inspect source. Confirm remote dependencies stay blocked.
 4. Save draft feedback, publish it, resubmit and verify the old grade disappears. Try grading an old revision and verify 409 plus refreshed review.
 5. Check missing work and a known comparison, including multiple matching students. Verify analysis does not alter marks.
-6. Export CSV/print: numeric roll order, zero marks retained, incomplete totals blank. Test keyboard dialogs/focus and mobile sign-out.
+6. Export Excel/CSV/print: numeric roll order, zero marks retained, incomplete totals blank. In Excel check wide columns, wrapped names, frozen headers, filters and repeated print headings. Test keyboard dialogs/focus and mobile sign-out.
 7. Restart the persistent server or request a fresh serverless instance and verify stored work remains.
 
 ## Troubleshooting

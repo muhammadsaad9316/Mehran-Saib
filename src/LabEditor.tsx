@@ -333,7 +333,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
                   <summary>Automatic checks (optional) <span>{task.requirements.length} checks</span></summary>
                 <p className="muted">
                   Check actual HTML elements, attributes, page text, or project
-                  filenames. Use CSS selectors for element and attribute rules.
+                  filenames. HTML pages accept any .html or .htm name. Use CSS selectors for element and attribute rules.
                 </p>
                 {task.requirements.map((rule, ruleIndex) => (
                   <div key={rule.id} className="task-editor">
@@ -387,7 +387,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
                           }
                           placeholder={
                             rule.type === "file"
-                              ? "lab1.html"
+                              ? "*.html"
                               : rule.type === "text"
                                 ? "Welcome to Web Engineering"
                                 : "h1"

@@ -47,7 +47,7 @@ Serverless reads check the global revision each time. An unchanged revision reus
 | `server/uploads.ts` | Safe paths, ZIPs, encoding and budgets |
 | `server/analysis.ts` | Requirements, quality and similarity |
 | `server/instructions.ts` | Instruction text and candidate rules |
-| `server/marks-sheet.ts` | Totals, CSV, marks words and print HTML |
+| `server/marks-sheet.ts`, `server/marks-sheet-xlsx.ts` | Totals, CSV, marks words, print HTML and styled Excel export |
 | `server/seed.ts`, `server/fixtures/` | Demo data and original documents |
 | `server/class-setup.ts`, `server/analysis-demo.ts` | Explicit provisioning and isolated analysis demo |
 | `shared/types.ts`, `shared/roster.ts` | Public contract, roll bounds, ordering/migration |

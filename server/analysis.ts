@@ -45,6 +45,7 @@ const normalizeText = (value: string) =>
   value.replace(/\s+/g, " ").trim().toLowerCase();
 const cleanPath = (value: string) =>
   posix.normalize(value.replace(/\\/g, "/")).replace(/^\.\//, "");
+const textBoundaries = new Set("html head title body address article aside blockquote br dd div dl dt fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table tbody td th thead tr ul".split(" "));
 const boilerplate = new Set([
   "html",
   "head",
@@ -401,15 +402,21 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
       result.documents.push(document);
       const features: Feature[] = [];
       const textParts: string[] = [];
-      const contentNodes = [...$.root()[0].children].reverse();
+      const children = $.root()[0].children;
+      const contentNodes: (typeof children[number] | string)[] = [...children].reverse();
       while (contentNodes.length) {
         const child = contentNodes.pop()!;
-        if (child.type === "text") textParts.push(child.data);
+        if (typeof child === "string") textParts.push(child);
+        else if (child.type === "text") textParts.push(child.data);
         else if (
           child.type !== "script" &&
           child.type !== "style" &&
           "children" in child
         ) {
+          if ("name" in child && textBoundaries.has(child.name.toLowerCase())) {
+            textParts.push(" ");
+            contentNodes.push(" ");
+          }
           for (let i = child.children.length - 1; i >= 0; i--)
             contentNodes.push(child.children[i]);
         }
@@ -536,23 +543,33 @@ function checkRequirement(
 ): AnalysisResult["requirements"][number] {
   let passed = false;
   let detail = "";
+  let label = requirement.label;
   try {
     if (requirement.type === "file") {
       const expected = cleanPath(requirement.value).toLowerCase();
-      const matcher = new RegExp(
-        `^${expected
-          .split("*")
-          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-          .join(".*")}$`,
-      );
-      passed = [...submission.files, ...(submission.assets ?? [])].some(
-        (file) =>
-          matcher.test(cleanPath(file.path).toLowerCase()) ||
-          matcher.test(posix.basename(cleanPath(file.path)).toLowerCase()),
-      );
-      detail = passed
-        ? "A matching uploaded file is present."
-        : `No uploaded file matches ${requirement.value}.`;
+      if (/\.html?$/.test(expected)) {
+        const page = submission.files.find((file) => /\.html?$/i.test(file.path));
+        passed = !!page;
+        label = "HTML page uploaded (any filename)";
+        detail = page
+          ? `${page.path} is an uploaded HTML page. Its filename is not restricted.`
+          : "No HTML page was uploaded. Any .html or .htm filename is accepted.";
+      } else {
+        const matcher = new RegExp(
+          `^${expected
+            .split("*")
+            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join(".*")}$`,
+        );
+        passed = [...submission.files, ...(submission.assets ?? [])].some(
+          (file) =>
+            matcher.test(cleanPath(file.path).toLowerCase()) ||
+            matcher.test(posix.basename(cleanPath(file.path)).toLowerCase()),
+        );
+        detail = passed
+          ? "A matching uploaded file is present."
+          : `No uploaded file matches ${requirement.value}.`;
+      }
     } else if (requirement.type === "text") {
       const expected = normalizeText(requirement.value);
       passed =
@@ -584,7 +601,7 @@ function checkRequirement(
     detail =
       "This checklist rule has an invalid selector. The teacher should edit the rule.";
   }
-  return { id: requirement.id, label: requirement.label, passed, detail };
+  return { id: requirement.id, label, passed, detail };
 }
 
 function fingerprints(parsed: ParsedSubmission, kind: ParsedFile["kind"]) {

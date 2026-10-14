@@ -4,13 +4,13 @@
 }
 :root {
   font-family: "DM Sans", sans-serif;
-  color: #293a32;
-  background: #f7f9f7;
+  color: var(--workspace-ink);
+  background: var(--workspace-paper);
   font-synthesis: none;
   font-size: 14px;
-  --green: #285a43;
-  --muted: #86928b;
-  --border: #e6ebe6;
+  --green: var(--workspace-action);
+  --muted: var(--workspace-muted);
+  --border: var(--workspace-edge);
   --radius: 12px;
   --sidebar: 244px;
 }
@@ -57,12 +57,12 @@ textarea {
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #397a58;
+  outline: 2px solid var(--workspace-focus);
 }
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid #9bb5a5;
+  outline: 2px solid var(--workspace-focus);
   outline-offset: 0;
 }
 h1,
@@ -2062,7 +2062,10 @@ tbody tr:hover {
 .login-page {
   display: grid;
   grid-template-columns: 1fr;
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .login-brand {
   background: #244d37;

@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import AdmZip from "adm-zip";
+import { load } from "cheerio";
+import { marksSheetXlsx } from "./marks-sheet-xlsx.js";
 import {
   buildMarksSheet,
   marksInWords,
@@ -94,6 +97,14 @@ test("marks sheets use numeric roll order, complete task totals, and blank incom
   assert.match(csv, /R\. No","Name","Marks in Figure","Marks in Words/);
   assert.match(csv, /'=TEST\(\)/);
   assert.equal(csv.split("\r\n").length, 7);
+  const workbook = new AdmZip(marksSheetXlsx(sheet));
+  const worksheet = load(workbook.readAsText("xl/worksheets/sheet1.xml"), { xmlMode: true });
+  assert.equal(worksheet('c[r="C6"] v').text(), "0");
+  assert.equal(worksheet('c[r="C7"] v').text(), "17.5");
+  assert.equal(worksheet('c[r="C8"] v').length, 0);
+  assert.equal(worksheet('c[r="B8"]').attr("t"), "inlineStr");
+  assert.equal(worksheet('c[r="B8"] t').text(), "=TEST()");
+  assert.equal(worksheet("f").length, 0);
   assert.match(
     marksSheetHtml({
       ...sheet,
@@ -114,4 +125,36 @@ test("marks in words supports the configured maximum and fractional grades", () 
   assert.equal(marksInWords(100), "One hundred");
   assert.equal(marksInWords(20000), "Twenty thousand");
   assert.equal(marksInWords(9.25), "Nine point two five");
+});
+
+test("Excel exports readable, printable columns and safe literal text", () => {
+  const workbook = new AdmZip(marksSheetXlsx({
+    title: "Lab 1 Marks Sheet (Fall 2026)",
+    rows: [{ rollNumber: "1", name: '=HYPERLINK("https://example.test") & <name>\u0001 😀', marks: 9.25, words: "Nine point two five" }],
+  }));
+  assert.equal(workbook.getEntries().length, 6);
+  const xml = workbook.readAsText("xl/worksheets/sheet1.xml");
+  const sheet = load(xml, { xmlMode: true });
+  assert.equal(sheet('c[r="B6"] t').text(), '=HYPERLINK("https://example.test") & <name> 😀');
+  assert.equal(sheet('c[r="C6"] v').text(), "9.25");
+  assert.equal(sheet('c[r="C6"]').attr("t"), undefined);
+  assert.equal(sheet("f, hyperlink").length, 0);
+  assert.equal(sheet('col[min="2"]').attr("width"), "36");
+  assert.equal(sheet('col[min="4"]').attr("width"), "42");
+  assert.equal(sheet("pane").attr("state"), "frozen");
+  assert.equal(sheet("pane").attr("topLeftCell"), "A6");
+  assert.equal(sheet("autoFilter").attr("ref"), "A5:D6");
+  assert.equal(sheet('mergeCell[ref="A1:D1"]').length, 1);
+  assert.equal(sheet("pageSetup").attr("paperSize"), "9");
+  assert.equal(sheet("pageSetup").attr("fitToWidth"), "1");
+  assert.equal(sheet("pageSetup").attr("fitToHeight"), "0");
+  assert.ok(!xml.includes("\u0001"));
+  const styles = load(workbook.readAsText("xl/styles.xml"), { xmlMode: true });
+  assert.equal(styles("cellXfs > xf").length, 11);
+  assert.equal(styles('fgColor[rgb="FFF97316"]').length, 1);
+  const names = load(workbook.readAsText("xl/workbook.xml"), { xmlMode: true });
+  assert.equal(names('definedName[name="_xlnm.Print_Titles"]').text(), "'Marks sheet'!$1:$5");
+  const empty = load(new AdmZip(marksSheetXlsx({ title: "Empty sheet", rows: [] })).readAsText("xl/worksheets/sheet1.xml"), { xmlMode: true });
+  assert.equal(empty("autoFilter").length, 0);
+  assert.equal(empty('mergeCell[ref="A7:D7"]').length, 1);
 });

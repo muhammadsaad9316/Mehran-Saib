@@ -663,6 +663,13 @@ export default function TeacherPortal({
                         </button>
                         <a
                           className="teacher-text-button"
+                          href={`/api/reports.xlsx?labId=${encodeURIComponent(lab.id)}`}
+                          download
+                        >
+                          <DownloadSimple size={15} weight="light" /> Excel marks sheet
+                        </a>
+                        <a
+                          className="teacher-text-button"
                           href={`/api/reports.csv?labId=${encodeURIComponent(lab.id)}`}
                           download
                         >
@@ -752,6 +759,12 @@ export default function TeacherPortal({
                     {rows.length === 1 ? "student" : "students"}
                   </span>
                   <div>
+                    <a
+                      href={`/api/reports.xlsx?labId=${encodeURIComponent(currentLab.id)}`}
+                      download
+                    >
+                      <DownloadSimple size={16} weight="light" /> Excel
+                    </a>
                     <a
                       href={`/api/reports.csv?labId=${encodeURIComponent(currentLab.id)}`}
                       download

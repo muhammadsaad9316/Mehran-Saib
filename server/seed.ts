@@ -28,9 +28,9 @@ export function initialLabs(): Lab[] {
       title: "Page setup & metadata",
       maxMarks: 10,
       description:
-        'Create lab1.html with the HTML5 document structure. Use your full name as the title; include UTF-8, author and description metadata. Set body bgcolor="lightgray" and text="navy". Add “Welcome to Web Engineering” in an h1 and a paragraph with a title tooltip.',
+        'Create an HTML page (any filename) with the HTML5 document structure. Use your full name as the title; include UTF-8, author and description metadata. Set body bgcolor="lightgray" and text="navy". Add “Welcome to Web Engineering” in an h1 and a paragraph with a title tooltip.',
       requirements: [
-        rule("l1t1-file", "lab1.html included", "file", "lab1.html"),
+        rule("l1t1-file", "HTML page uploaded (any filename)", "file", "*.html"),
         tag("l1t1-title", "Page title present", "head > title"),
         tag(
           "l1t1-charset",
@@ -70,9 +70,9 @@ export function initialLabs(): Lab[] {
       title: "Headings & preformatted text",
       maxMarks: 10,
       description:
-        "Create lab2.html. Display h1 through h6. Separate your course name and semester with a br in a paragraph. Add a poem or multiline text inside pre to demonstrate preserved spaces and line breaks.",
+        "Create an HTML page (any filename). Display h1 through h6. Separate your course name and semester with a br in a paragraph. Add a poem or multiline text inside pre to demonstrate preserved spaces and line breaks.",
       requirements: [
-        rule("l1t2-file", "lab2.html included", "file", "lab2.html"),
+        rule("l1t2-file", "HTML page uploaded (any filename)", "file", "*.html"),
         ...[1, 2, 3, 4, 5, 6].map((level) =>
           tag(
             `l1t2-h${level}`,
@@ -89,13 +89,13 @@ export function initialLabs(): Lab[] {
       title: "Essay formatting",
       maxMarks: 10,
       description:
-        "Create lab3_essay.html with your full name in the title, gray body background and blue text. Add an h2 essay heading. Format Web Engineering with strong, essential with em and HTML with mark. Place hr after the second sentence, del around third, ins around fourth, sub around 2 in H2O and sup around 2 in x2.",
+        "Create an HTML page (any filename) with your full name in the title, gray body background and blue text. Add an h2 essay heading. Format Web Engineering with strong, essential with em and HTML with mark. Place hr after the second sentence, del around third, ins around fourth, sub around 2 in H2O and sup around 2 in x2.",
       requirements: [
         rule(
           "l1t3-file",
-          "lab3_essay.html included",
+          "HTML page uploaded (any filename)",
           "file",
-          "lab3_essay.html",
+          "*.html",
         ),
         tag("l1t3-title", "Page title present", "head > title"),
         tag("l1t3-bg", "Gray body background", 'body[bgcolor="gray" i]'),
@@ -120,6 +120,7 @@ export function initialLabs(): Lab[] {
         "Create a webpage titled “Emerging Technologies in Computer Science”. Add different heading levels and two paragraphs about artificial intelligence, cloud computing and software engineering. Include br, hr, b, strong, i, em, mark, del, ins and a multiline technical message in pre. The assignment does not prescribe a filename.",
       requirements: [
         tag("l2t1-title", "Page title present", "head > title"),
+        rule("l2t1-title-text", "Required article title text present", "text", "Emerging Technologies in Computer Science"),
         tag("l2t1-heading", "Main heading present", "body h1"),
         tag(
           "l2t1-subheading",
@@ -175,6 +176,7 @@ export function initialLabs(): Lab[] {
         "Create “HTML Formatting and Character Entities” with a main heading and at least three sections divided by horizontal lines. Demonstrate named, RGB and hex colors. Use font with varied sizes, colors and faces. Display less-than, greater-than, ampersand, quotation marks, copyright, registered trademark, multiplication and division using character entities.",
       requirements: [
         tag("l2t3-title", "Page title present", "head > title"),
+        rule("l2t3-title-text", "Required formatting title text present", "text", "HTML Formatting and Character Entities"),
         tag("l2t3-heading", "Main heading present", "body h1"),
         tag("l2t3-hr", "Horizontal divider present", "body hr"),
         ...["color", "size", "face"].map((attr) =>

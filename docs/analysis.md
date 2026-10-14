@@ -36,8 +36,8 @@ Both individual review and pair comparison validate navigation messages against 
 | --- | --- |
 | `tag` | CSS selector matches a source element in parsed HTML; parser-inserted wrappers do not count |
 | `attribute` | Selector matches a source element whose named attribute is nonempty |
-| `text` | Case/whitespace-normalized text appears in parsed page content, including title and excluding comments/scripts/styles |
-| `file` | Case-insensitive path or basename match, with `*` wildcard support; checks source and asset metadata |
+| `text` | Case/whitespace-normalized text appears in parsed page content, including title and excluding comments/scripts/styles; blocks and line breaks separate words, while inline formatting preserves joined words |
+| `file` | HTML requirements accept any uploaded source `.html` or `.htm` filename, including older named rules such as `index.html`. Other files use case-insensitive path or basename matching with `*` wildcards across source and asset metadata |
 
 Checks examine the HTML documents in the submitted task project within scan limits; selecting a preview entrypoint does **not** restrict backend analysis to that page. The original [assignment notes](lab-requirements.md) describe teacher review of the intended task entrypoint; do not mistake that recommendation for an implemented entrypoint parameter.
 
@@ -75,7 +75,9 @@ These are independent of the larger upload allowance. Accepted uploads can excee
 
 Attachments use raw base64 and a maximum decoded size of 3 MiB. Supported extraction: text-based PDF (pdfjs-dist), DOCX (Mammoth), TXT/MD. Legacy DOC can be attached to a lab but automatic extraction rejects it. Scanned PDFs need manual entry; there is no OCR.
 
-PDFs are limited to 25 pages. DOCX packages need `word/document.xml`, at most 500 archive entries and at most 20 MiB declared uncompressed content. Extracted text is capped at 250,000 characters. Task/Exercise headings split up to 20 sections; otherwise one draft task is returned. Drafts default to ten marks, cap descriptions to 8,000 characters and candidate rules to 80 per task. Explicit tags, shown attributes, filenames and selected quoted text yield candidates; examples are not necessarily mandatory requirements.
+PDFs are limited to 25 pages. DOCX packages need `word/document.xml`, at most 500 archive entries and at most 20 MiB declared uncompressed content. Extracted text is capped at 250,000 characters. Task/Exercise headings split up to 20 sections; otherwise one draft task is returned. Drafts default to ten marks, cap descriptions to 8,000 characters and candidate rules to 80 per task. Explicit tags, shown attributes, filenames and selected quoted text yield candidates, with selected prose checks for metadata, headings, formatting and tooltips. When present, the concrete Instructions & Steps section takes precedence over objectives. Hint lists are excluded; values marked as examples require the attribute but not that exact value. HTML filenames become a single generic page check. These are conservative draft heuristics, not a complete interpretation of arbitrary assignment prose.
+
+The 14 October 2026 filename policy applies when evaluating existing saved rules without changing their IDs or stored values. Other extraction improvements apply to newly generated drafts; initial assignment defaults are updated for new classrooms. Existing custom rules remain teacher-editable. Correct counts, placement, color syntax, entity source spelling and semantic content still need teacher review.
 
 Teachers must review rules, marks and task IDs before saving/publishing. Candidate filenames can mention types such as SVG that project upload does not accept; reconcile those rules with upload support rather than promising every extracted filename can be uploaded.
 

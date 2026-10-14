@@ -27,6 +27,8 @@ Teacher/student portals load through `React.lazy` only when their role is render
 
 ## State and requests
 
+The teacher's submission review fills the viewport, giving the preview and source most of the space. Desktop uses a compact 260px grading sidebar; task instructions and analysis are collapsed until opened. Mobile stacks the supporting panels below the large preview. Live preview, source, files and detailed analysis remain separate views. The Files tab lists source and image assets with ownership-checked downloads. The sidebar displays actual requirement/quality/similarity results and never assigns a grade.
+
 1. `App.refresh()` calls `api<AppState>("/state")`.
 2. If an unsigned development state says `demo=true`, startup requests the teacher demo then reloads state. Real environments show login.
 3. The signed-in user's role selects the portal. Role-based UI is presentation; server checks remain authoritative.
@@ -41,13 +43,17 @@ Analysis/evidence are attached to task-description/requirements and submission-I
 
 ## Styling and accessibility
 
-Styles load in this order: `styles.css` → `teacher.css` → `student.css` → `polish.css`. Later rules can override earlier ones. Check all relevant sheets before adding selectors; avoid broad rules that affect both portals unintentionally. Phosphor provides interface icons; fonts are installed locally through Fontsource.
+Styles load in this order: `styles.css` → `teacher.css` → `student.css` → `polish.css` → `review.css`. Later rules can override earlier ones. `review.css` scopes the teacher submission dialog's preview workspace and task/analysis/grading panels; mobile stacks the panels below the preview. Check all relevant sheets before adding selectors; avoid broad rules that affect both portals unintentionally. Phosphor provides interface icons; fonts are installed locally through Fontsource.
 
-The teacher portal uses warm paper surfaces, graphite navigation and orange actions. Keep the existing component styling and responsive rules when extending it. There is no separate UI-component package or generated design-token file.
+The workspace uses a Quordix-inspired white-and-orange palette: white surfaces, slate text, orange actions and soft orange selected states. Shared `--workspace-*` tokens in `polish.css` feed the teacher/student palettes; darker orange is used for small accent text, while bright orange buttons use dark ink for contrast. The login brand panel includes a subtle dotted background. Keep the existing component styling and responsive rules when extending it. There is no separate UI-component package or generated design-token file.
 
 Shared dialogs make background regions inert, lock body scroll, manage focus and trap Tab. `LabEditor` owns its focus/scroll lifecycle. Portal page changes move focus to their content region; status/errors use accessible roles. Preserve labels, keyboard controls, focus restoration and mobile sign-out when editing layouts. `Ctrl/Cmd+K` focuses search; Escape closes common dialogs.
 
 User-facing dates use `en-GB` formatting in `Asia/Karachi`. `LabEditor` interprets deadline inputs using `+05:00` and the backend stores ISO timestamps. Keep empty deadlines as `""`; do not turn them into an invalid date or implicit deadline.
+
+## Marks-sheet downloads
+
+Teachers can download a formatted Excel marks sheet from the lab library or class register; CSV and the printable marks sheet remain available beside it. Excel preserves column widths, wrapping, orange headings and frozen headers. CSV contains only values and cannot retain spreadsheet formatting.
 
 ## Submitted-code preview
 

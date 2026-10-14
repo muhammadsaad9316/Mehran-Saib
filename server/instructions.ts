@@ -36,25 +36,70 @@ function candidateRules(text: string, taskNumber: number): Requirement[] {
     const key = `${rule.type}:${rule.value}:${rule.attribute ?? ""}`;
     if (!candidates.has(key)) candidates.set(key, rule);
   }
-  const prose = text.replace(/<!--[\s\S]*?-->/g, " ");
+  let prose = text.replace(/<!--[\s\S]*?-->/g, " ");
+  const steps = prose.search(/Instructions\s*&\s*Steps\s*:/i);
+  if (steps >= 0) prose = prose.slice(steps);
+  const hints = prose.search(/\bHints?\s*:/i);
+  if (hints >= 0) prose = prose.slice(0, hints);
+  const isExample = (index: number) => /(?:e\.g\.|for example|example\s*:)[^.\n]*$/i.test(prose.slice(Math.max(0, index - 300), index));
   for (const match of prose.matchAll(/<\/?([a-z][a-z0-9-]*)(\s[^<>]*?)?\s*\/?>/gi)) {
     const tag = match[1].toLowerCase();
     if (!htmlTags.has(tag)) continue;
     add({ label: `${tag} element present`, type: "tag", value: tag });
+    const example = isExample(match.index!);
     for (const attribute of (match[2] ?? "").matchAll(/\b([a-z][a-z0-9-]*)\s*=\s*(["'])(.*?)\2/gi)) {
       const name = attribute[1].toLowerCase();
       const value = attribute[3];
       if (!value || name.length > 100 || /[\x00-\x1f]/.test(value)) continue;
-      const selector = `${tag}[${name}=${JSON.stringify(value)}]`;
-      add({ label: `${tag} ${name} matches the shown value (review)`, type: "attribute", value: selector, attribute: name });
+      const selector = example ? tag : `${tag}[${name}=${JSON.stringify(value)}]`;
+      add({ label: example ? `${tag} has ${name} (example value is optional)` : `${tag} ${name} matches the shown value (review)`, type: "attribute", value: selector, attribute: name });
     }
   }
   for (const match of prose.matchAll(/\b([a-z0-9][a-z0-9._-]{0,150}\.(?:html?|css|js|json|svg|png|jpe?g|gif|webp))\b/gi)) {
-    add({ label: `${match[1]} included (review)`, type: "file", value: match[1] });
+    if (!/\.html?$/i.test(match[1]) && isExample(match.index!)) continue;
+    add(/\.html?$/i.test(match[1])
+      ? { label: "HTML page uploaded (any filename)", type: "file", value: "*.html" }
+      : { label: `${match[1]} included (review)`, type: "file", value: match[1] });
+  }
+  if (/<meta\b/i.test(prose)) {
+    if (/UTF-8/i.test(prose)) add({ label: "UTF-8 metadata present", type: "tag", value: 'meta[charset="utf-8" i]' });
+    for (const name of ["author", "description"])
+      if (new RegExp(`\\b${name}\\b`, "i").test(prose))
+        add({ label: `${name} metadata has content`, type: "attribute", value: `meta[name="${name}" i]`, attribute: "content" });
+  }
+  if (/<p\b/i.test(prose) && /\btitle attribute\b/i.test(prose))
+    add({ label: "Paragraph has a tooltip (any text)", type: "attribute", value: "p", attribute: "title" });
+  if (/<body\b/i.test(prose))
+    for (const match of prose.matchAll(/\b(bgcolor|text)\s*=\s*(["'])(.*?)\2/gi))
+      if (!isExample(match.index!))
+        add({ label: `Body ${match[1]} matches the assignment`, type: "attribute", value: `body[${match[1]}=${JSON.stringify(match[3])} i]`, attribute: match[1].toLowerCase() });
+  if (/all six heading levels/i.test(prose)) {
+    for (let level = 1; level <= 6; level++)
+      add({ label: `Heading level ${level} present`, type: "tag", value: `h${level}` });
+  } else {
+    if (/main heading/i.test(prose)) add({ label: "Main heading present", type: "tag", value: "h1" });
+    if (/subheadings|different heading levels/i.test(prose))
+      add({ label: "Subheading present (any level)", type: "tag", value: "h2, h3, h4, h5, h6" });
+  }
+  if (/\b(?:two|2) paragraphs\b/i.test(prose))
+    add({ label: "Paragraph present (review the required count)", type: "tag", value: "p" });
+  const formatting = prose.match(/\bdemonstrate\b([^.!?]{0,500})\btext\b/i)?.[1] ?? "";
+  for (const [term, tag] of [["bold", "b"], ["strong", "strong"], ["italic", "i"], ["emphasized", "em"], ["highlighted", "mark"], ["deleted", "del"], ["inserted", "ins"]])
+    if (new RegExp(`\\b${term}\\b`, "i").test(formatting))
+      add({ label: `${tag} formatting present`, type: "tag", value: tag });
+  if (/horizontal (?:lines?|dividers?)/i.test(prose))
+    add({ label: "Horizontal divider present (review placement)", type: "tag", value: "hr" });
+  if (/<abbr\b/i.test(prose) && /full forms?/i.test(prose))
+    add({ label: "Abbreviation has a full-form tooltip", type: "attribute", value: "abbr", attribute: "title" });
+  if (/<bdo\b/i.test(prose) && /right-to-left/i.test(prose))
+    add({ label: "Right-to-left override present", type: "attribute", value: 'bdo[dir="rtl" i]', attribute: "dir" });
+  if (/<font\b/i.test(prose)) {
+    for (const attr of ["color", "size", "face"])
+      add({ label: `Font specifies ${attr} (any appropriate value)`, type: "attribute", value: "font", attribute: attr });
   }
   const quotedText = /\b(?:titled|title\s*(?:to|is|:)|heading\s+with\s+(?:the\s+)?text\s*:|wrap)\s*[“"']([^”"'\n]{1,500})[”"']/gi;
   for (const match of prose.matchAll(quotedText)) {
-    const value = match[1].trim();
+    const value = /^titl/i.test(match[0]) ? match[1].trim().replace(/\.$/, "") : match[1].trim();
     add({ label: "Specified text present (review placement)", type: "text", value });
   }
   return [...candidates.values()].slice(0, 80).map((rule, index) => ({ id: `draft-${taskNumber}-rule-${index + 1}`, ...rule }));
@@ -79,7 +124,7 @@ export function draftRequirementsFromText(input: string): InstructionDraft {
   }));
   return {
     tasks, text,
-    notice: "Generated a draft from explicit tags, shown attributes, filenames, and specified text. Examples may not be mandatory, and content, counts, layout, and behavior still need teacher review. Each task defaults to 10 marks. Review every task and requirement before publishing; excerpts and candidate lists are limited to 8,000 characters and 80 checks per task.",
+    notice: "Generated a draft from explicit instructions. HTML pages accept any filename. Hint lists and example values are not exact requirements; content, counts, layout, and behavior still need teacher review. Each task defaults to 10 marks. Review every task and requirement before publishing; excerpts and candidate lists are limited to 8,000 characters and 80 checks per task.",
   };
 }
 

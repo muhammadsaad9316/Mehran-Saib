@@ -9,11 +9,32 @@ test("drafts task-specific rules from explicit syntax without counting comments"
   assert.equal(draft.tasks.length, 2);
   assert.equal(draft.tasks[0].title, "Basics");
   assert.equal(draft.tasks[1].title, "Output");
-  assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "file" && rule.value === "lab1.html"));
+  assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "file" && rule.value === "*.html"));
   assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "attribute" && rule.attribute === "title" && rule.value === 'p[title="Tooltip"]'));
   assert.ok(!draft.tasks[0].requirements.some(rule => rule.value === "script"));
   assert.deepEqual(draft.tasks[1].requirements.map(rule => rule.value), ["pre"]);
   assert.match(draft.notice, /teacher review/i);
+});
+
+test("hint headings and example attribute values do not become rigid assignment requirements", () => {
+  const article = draftRequirementsFromText('Create a webpage titled “Emerging Technologies in Computer Science.” Add a main heading and suitable subheadings. Write two paragraphs. Demonstrate bold, strong, italic, emphasized, highlighted, deleted, and inserted text. Hints: <h1> – <h6>, <p>.').tasks[0];
+  assert.ok(article.requirements.some(rule => rule.value === "h2, h3, h4, h5, h6"));
+  assert.ok(!article.requirements.some(rule => rule.value === "h6"));
+  assert.ok(article.requirements.some(rule => rule.value === "Emerging Technologies in Computer Science"));
+  for (const tag of ["b", "strong", "i", "em", "mark", "del", "ins"])
+    assert.ok(article.requirements.some(rule => rule.value === tag));
+  const font = draftRequirementsFromText('Use the <font> tag with different colors, sizes and faces. Hints: <font color="blue" size="5" face="Arial">.').tasks[0];
+  for (const attribute of ["color", "size", "face"])
+    assert.ok(font.requirements.some(rule => rule.type === "attribute" && rule.value === "font" && rule.attribute === attribute));
+  assert.ok(!font.requirements.some(rule => /blue|Arial/.test(rule.value)));
+  const tooltip = draftRequirementsFromText('Add a paragraph, for example <p title="Tooltip text">.').tasks[0];
+  assert.ok(tooltip.requirements.some(rule => rule.type === "attribute" && rule.value === "p" && rule.attribute === "title"));
+  const separate = draftRequirementsFromText('For example <p title="Example">. Set <body bgcolor="gray">. Use an external stylesheet, for example style.css.').tasks[0];
+  assert.ok(separate.requirements.some(rule => rule.value === 'body[bgcolor="gray"]'));
+  assert.ok(!separate.requirements.some(rule => rule.type === "file" && rule.value === "style.css"));
+  const headings = draftRequirementsFromText('Display all six heading levels from <h1> to <h6>.').tasks[0];
+  for (let level = 1; level <= 6; level++)
+    assert.ok(headings.requirements.some(rule => rule.value === `h${level}`));
 });
 
 test("plain prose creates a reviewable task without inventing checklist rules", () => {
@@ -24,7 +45,7 @@ test("plain prose creates a reviewable task without inventing checklist rules", 
   assert.throws(() => draftRequirementsFromText(" "), /No readable text/);
   assert.throws(() => draftRequirementsFromText(Array.from({ length: 21 }, (_, index) => `Task ${index + 1}: Example\n<p>`).join("\n")), /more than 20 tasks/);
   assert.equal(draftRequirementsFromText("Task 1\nUse <pre>.").tasks[0].title, "Task 1");
-  const bounded = draftRequirementsFromText("Task 1: Files\n" + Array.from({ length: 100 }, (_, index) => `file${index}.html`).join(" ") + "\n" + "x".repeat(9000));
+  const bounded = draftRequirementsFromText("Task 1: Files\n" + Array.from({ length: 100 }, (_, index) => `file${index}.css`).join(" ") + "\n" + "x".repeat(9000));
   assert.equal(bounded.tasks[0].requirements.length, 80);
   assert.equal(bounded.tasks[0].description.length, 8000);
 });
@@ -37,15 +58,22 @@ test("reads a generated DOCX and extracts specified text and filenames", async (
   const draft = await analyzeInstructions({ name: "fixture.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", content: archive.toBuffer().toString("base64") });
   assert.equal(draft.tasks.length, 1);
   assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "text" && rule.value === "Welcome"));
-  assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "file" && rule.value === "welcome.html"));
+  assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "file" && rule.value === "*.html"));
 });
 
 test("extracts the original Lab 1 DOCX into its three assignment tasks", async () => {
   const bytes = await readFile(new URL("./fixtures/Web Engineering.docx", import.meta.url));
   const draft = await analyzeInstructions({ name: "Web Engineering.docx", content: bytes.toString("base64"), contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
   assert.equal(draft.tasks.length, 3);
-  assert.deepEqual(draft.tasks.map(task => task.requirements.filter(rule => rule.type === "file").map(rule => rule.value)), [["lab1.html"], ["lab2.html"], ["lab3_essay.html"]]);
+  assert.deepEqual(draft.tasks.map(task => task.requirements.filter(rule => rule.type === "file").map(rule => rule.value)), [["*.html"], ["*.html"], ["*.html"]]);
   assert.ok(draft.tasks[0].requirements.some(rule => rule.type === "text" && rule.value === "Welcome to Web Engineering"));
+  assert.ok(draft.tasks[0].requirements.some(rule => rule.value === 'meta[charset="utf-8" i]'));
+  assert.ok(draft.tasks[0].requirements.some(rule => rule.value === 'meta[name="author" i]' && rule.attribute === "content"));
+  assert.ok(draft.tasks[0].requirements.some(rule => rule.value === "p" && rule.attribute === "title"));
+  assert.ok(!draft.tasks[0].requirements.some(rule => rule.value.includes("Tooltip text")));
+  for (let level = 1; level <= 6; level++)
+    assert.ok(draft.tasks[1].requirements.some(rule => rule.value === `h${level}`));
+  assert.ok(!draft.tasks[2].requirements.some(rule => rule.value === "b" || rule.value === "i"));
   assert.ok(draft.tasks[2].requirements.some(rule => rule.value === "strong"));
 });
 
@@ -56,7 +84,7 @@ test("extracts the original Lab 2 PDF without inventing filenames", async () => 
   assert.match(draft.tasks[0].title, /Technical Article/);
   assert.match(draft.tasks[1].title, /Contact.*Page/);
   assert.ok(draft.tasks.every(task => task.requirements.every(rule => rule.type !== "file")));
-  assert.ok(draft.tasks[1].requirements.some(rule => rule.attribute === "dir" && rule.value === 'bdo[dir="rtl"]'));
+  assert.ok(draft.tasks[1].requirements.some(rule => rule.attribute === "dir" && rule.value === 'bdo[dir="rtl" i]'));
 });
 
 test("rejects invalid base64, oversize content, malformed documents and legacy DOC", async () => {

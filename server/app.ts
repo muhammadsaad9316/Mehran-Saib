@@ -23,6 +23,7 @@ import {
   marksSheetCsv,
   marksSheetHtml,
 } from "./marks-sheet.js";
+import { marksSheetXlsx } from "./marks-sheet-xlsx.js";
 import { analyzeInstructions } from "./instructions.js";
 import { hashPassword, sessionToken, verifyPassword } from "./auth.js";
 import { demoDatabase, migrateDemoRoster } from "./seed.js";
@@ -932,7 +933,7 @@ export async function createApp(options: AppOptions = {}) {
     res.type(asset?.mimeType || "text/plain");
     res.send(asset ? Buffer.from(asset.base64, "base64") : file!.content);
   });
-  app.get("/api/reports.csv", (req, res) => {
+  app.get(["/api/reports.csv", "/api/reports.xlsx"], (req, res) => {
     actor(res, "teacher");
     const labId =
       typeof req.query.labId === "string" ? req.query.labId : undefined;
@@ -947,6 +948,13 @@ export async function createApp(options: AppOptions = {}) {
       store.data.users,
       store.data.submissions,
     );
+    if (req.path.endsWith(".xlsx")) {
+      res
+        .attachment(`lab-${index + 1}-marks-sheet-fall-2026.xlsx`)
+        .type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .send(marksSheetXlsx(sheet));
+      return;
+    }
     res
       .attachment(`lab-${index + 1}-marks-sheet-fall-2026.csv`)
       .type("text/csv")

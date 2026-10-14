@@ -11,6 +11,9 @@ import {
   FloppyDisk,
   DownloadSimple,
   CaretRight,
+  Clock,
+  Globe,
+  ChartBar,
 } from "@phosphor-icons/react";
 import type { AppState, AnalysisResult, Submission } from "../shared/types";
 import { api, saveFile } from "./api";
@@ -32,6 +35,7 @@ export default function Review({
   const task = lab.tasks.find((t) => t.id === submission.taskId)!;
   const student =
     state.students.find((s) => s.id === submission.studentId) || state.user!;
+  const teacher = state.user?.role === "teacher";
   const [tab, setTab] = useState("preview");
   const [file, setFile] = useState(
     submission.files.find((f) => /\.html?$/i.test(f.path))?.path ||
@@ -63,6 +67,7 @@ export default function Review({
       .sort(),
   ]);
   const analysis = analysisResult?.fingerprint === analysisFingerprint ? analysisResult.value : null;
+  const highestMatch = analysis?.similarities.find((match) => match.comparable);
   useEffect(() => {
     if (state.user?.role !== "teacher") return;
     let active = true;
@@ -148,15 +153,66 @@ export default function Review({
       setBusy(false);
     }
   }
+  const reviewHeader = (
+    <header className="modal-head">
+      <div className="review-head-main">
+        <div className="eyebrow">
+          {state.user?.role === "teacher"
+            ? "SUBMISSION REVIEW"
+            : "YOUR SUBMISSION"}{" "}
+          <span className="muted">/ REVISION {submission.revision}</span>
+        </div>
+        <h2>
+          {state.user?.role === "teacher" ? (
+            <>
+              Roll no. {student.rollNumber} ·{" "}
+              {student.name || "Name not provided"}{" "}
+              <span className="dot-separator">·</span>{" "}
+              <span className="review-head-task-title">{task.title}</span>
+            </>
+          ) : (
+            task.title
+          )}
+        </h2>
+        <p>
+          {lab.title} <span className="dot-separator">·</span>{" "}
+          {state.user?.role === "teacher" && (
+            <>
+              Task {lab.tasks.findIndex((item) => item.id === task.id) + 1}{" "}
+              <span className="dot-separator">·</span>{" "}
+            </>
+          )}
+          {new Date(submission.submittedAt).toLocaleString("en-GB", { timeZone: "Asia/Karachi" })}
+        </p>
+      </div>
+      {teacher && (
+        <div className="review-top-facts" aria-label="Submission summary">
+          <div className="review-top-fact">
+            <span className="fact-label"><Clock size={13} aria-hidden="true" /> Submitted</span>
+            <strong className={submission.late ? "review-status-warning" : "review-status-success"}>
+              {submission.late ? "Late" : "On time"}
+            </strong>
+          </div>
+        </div>
+      )}
+      <button
+        className={`icon-btn${teacher ? " review-mobile-close" : ""}`}
+        aria-label="Close review"
+        onClick={onClose}
+      >
+        <X size={22} />
+      </button>
+    </header>
+  );
   return (
     <div
-      className="modal-overlay"
+      className={`modal-overlay${teacher ? " review-overlay" : ""}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <section
-        className="modal review-modal"
+        className={`modal review-modal${teacher ? " teacher-review-modal" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={
@@ -165,69 +221,28 @@ export default function Review({
             : "Your submission"
         }
       >
-        <header className="modal-head">
-          <div>
-            <div className="eyebrow">
-              {state.user?.role === "teacher"
-                ? "SUBMISSION REVIEW"
-                : "YOUR SUBMISSION"}{" "}
-              <span className="muted">/ REVISION {submission.revision}</span>
-            </div>
-            <h2>
-              {state.user?.role === "teacher" ? (
-                <>
-                  Roll no. {student.rollNumber} ·{" "}
-                  {student.name || "Name not provided"}{" "}
-                  <span className="muted">· {task.title}</span>
-                </>
-              ) : (
-                task.title
-              )}
-            </h2>
-            <p>
-              {lab.title} <span className="dot-separator">·</span>{" "}
-              {state.user?.role === "teacher" && (
-                <>
-                  {student.rollNumber}{" "}
-                  <span className="dot-separator">·</span>{" "}
-                </>
-              )}
-              {new Date(submission.submittedAt).toLocaleString("en-GB", { timeZone: "Asia/Karachi" })}
-            </p>
-          </div>
-          <button
-            className="icon-btn"
-            aria-label="Close review"
-            onClick={onClose}
-          >
-            <X size={22} />
-          </button>
-        </header>
+        {!teacher && reviewHeader}
         <div className="review-layout">
           <div className="review-workspace">
+            {teacher && reviewHeader}
             <div className="tabs">
               {[
                 ["preview", Eye, "Live preview"],
                 ["code", Code, "Source code"],
-                ["analysis", ShieldCheck, "Code analysis"],
-              ]
-                .filter(
-                  ([id]) => state.user?.role === "teacher" || id !== "analysis",
-                )
-                .map(([id, Icon, label]) => {
-                  const I = Icon as typeof Eye;
-                  return (
-                    <button
-                      key={id as string}
-                      className={tab === id ? "active" : ""}
-                      aria-pressed={tab === id}
-                      onClick={() => setTab(id as string)}
-                    >
-                      <I size={18} />
-                      {label as string}
-                    </button>
-                  );
-                })}
+              ].map(([id, Icon, label]) => {
+                const I = Icon as typeof Eye;
+                return (
+                  <button
+                    key={id as string}
+                    className={tab === id ? "active" : ""}
+                    aria-pressed={tab === id}
+                    onClick={() => setTab(id as string)}
+                  >
+                    <I size={18} />
+                    {label as string}
+                  </button>
+                );
+              })}
             </div>
             {tab === "preview" && (
               <>
@@ -244,13 +259,16 @@ export default function Review({
                         <option key={f.path}>{f.path}</option>
                       ))}
                   </select>
-                  {state.user?.role === "teacher" && (
-                    <span className="preview-security">
-                      <ShieldCheck size={14} /> Isolated preview
-                    </span>
-                  )}
                 </div>
                 {entry ? (
+                  <div className={teacher ? "review-browser" : "review-preview"}>
+                    {teacher && (
+                      <div className="review-browser-bar" aria-hidden="true">
+                        <span className="review-browser-dots"><i /><i /><i /></span>
+                        <span className="review-browser-address"><Globe size={14} />{entry}</span>
+                        <ShieldCheck size={16} />
+                      </div>
+                    )}
                   <iframe
                     id="submission-preview"
                     title="Student project preview"
@@ -258,6 +276,7 @@ export default function Review({
                     referrerPolicy="no-referrer"
                     srcDoc={preview}
                   />
+                  </div>
                 ) : (
                   <div className="empty-state">
                     <FileCode size={40} />
@@ -278,11 +297,11 @@ export default function Review({
                     )}
                   </div>
                 )}
-                <p className="preview-note">
-                  {state.user?.role === "teacher"
-                    ? "Local CSS, scripts, images and page links are supported. External resources and fetch requests are restricted. Preview is isolated from this workspace."
-                    : "External resources are blocked in this preview."}
-                </p>
+                {!teacher && (
+                  <p className="preview-note">
+                    External resources are blocked in this preview.
+                  </p>
+                )}
                 {assetError && <p className="error" role="alert">{assetError}</p>}
               </>
             )}
@@ -480,117 +499,128 @@ export default function Review({
               </div>
             )}
           </div>
-          <aside className="grading-panel">
+          <aside className={teacher ? "review-sidebar" : "grading-panel"}>
             {state.user?.role === "teacher" && (
-              <>
-                <div className="eyebrow">TASK DETAILS</div>
-                <h3>{task.title}</h3>
-                <p>{task.description}</p>
-                <div className="submission-facts">
-                  <div>
-                    <span>Submitted</span>
-                    <strong>{submission.late ? "Late" : "On time"}</strong>
-                  </div>
-                  <div>
-                    <span>Files</span>
-                    <strong>
-                      {submission.files.length +
-                        (submission.assets?.length || 0)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Maximum marks</span>
-                    <strong>{task.maxMarks}</strong>
-                  </div>
+              <section className="review-card review-analysis-card" aria-label="Code analysis">
+                <div className="review-card-topline">
+                  <div className="eyebrow"><Code size={15} aria-hidden="true" /> CODE ANALYSIS</div>
+                  <button className="icon-btn review-desktop-close" aria-label="Close review" onClick={onClose}><X size={19} /></button>
                 </div>
-              </>
-            )}
-            {state.user?.role === "teacher" ? (
-              <>
-                <h3>Grade & feedback</h3>
-                <label className="field">
-                  Marks
-                  <div className="marks-input">
-                    <input
-                      disabled={busy}
-                      type="number"
-                      min="0"
-                      max={task.maxMarks}
-                      step="0.5"
-                      value={marks}
-                      onChange={(e) => setMarks(e.target.value)}
-                      placeholder="0"
-                    />
-                    <span>/ {task.maxMarks}</span>
-                  </div>
-                </label>
-                <label className="field">
-                  Feedback
-                  <textarea
-                    disabled={busy}
-                    rows={5}
-                    maxLength={4000}
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="Share what worked and what to improve…"
-                  />
-                </label>
-                <label className="check-field">
-                  <input
-                    disabled={busy}
-                    type="checkbox"
-                    checked={publish}
-                    onChange={(e) => setPublish(e.target.checked)}
-                  />{" "}
-                  Publish grade to student
-                </label>
-                <button
-                  className="btn btn-primary full"
-                  onClick={grade}
-                  disabled={
-                    busy ||
-                    marks === "" ||
-                    !Number.isFinite(Number(marks)) ||
-                    Number(marks) < 0 ||
-                    Number(marks) > task.maxMarks
-                  }
-                >
-                  <FloppyDisk size={18} />
-                  {busy ? "Saving…" : "Save grade"}
-                </button>
-                <p className="muted small-text">
-                  Grades are assigned by you. Analysis does not award or deduct
-                  marks.
-                </p>
-              </>
-            ) : (
-              <>
-                <h3>Your result</h3>
-                {submission.grade?.published ? (
+                {analysis ? (
                   <>
-                    <div className="student-score">
-                      {submission.grade.marks}
-                      <small> / {task.maxMarks}</small>
-                    </div>
-                    <p>
-                      {submission.grade.feedback || "No feedback provided."}
-                    </p>
+                    <dl className="review-analysis-facts">
+                      <div><dt>Requirements met</dt><dd className={analysis.total && analysis.met === analysis.total ? "review-status-success" : "review-status-warning"}>{analysis.total ? `${analysis.met} / ${analysis.total}` : "No checks set"}</dd></div>
+                      <div><dt>Quality observations</dt><dd>{analysis.quality.length}</dd></div>
+                      <div><dt>Highest similarity</dt><dd>{highestMatch ? `${highestMatch.percentage}%` : "Not comparable"}</dd></div>
+                    </dl>
+                    {analysis.requirements.length > 0 && (
+                      <div className="review-sidebar-checklist" aria-label="Requirements checklist">
+                        {analysis.requirements.map((r) => (
+                          <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
+                            {r.passed ? (
+                              <CheckCircle size={14} weight="fill" className="green" aria-hidden="true" />
+                            ) : (
+                              <WarningCircle size={14} className="amber" aria-hidden="true" />
+                            )}
+                            <span>{r.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button className="review-analysis-link" aria-pressed={tab === "analysis"} onClick={() => setTab("analysis")}>View full analysis <CaretRight size={15} /></button>
                   </>
-                ) : (
-                  <p className="muted">Awaiting your teacher's grade.</p>
-                )}
-              </>
+                ) : <p className="review-analysis-status" role={analysisError ? "alert" : "status"}>{analysisError || "Checking requirements and comparing code…"}</p>}
+              </section>
             )}
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-            {notice && (
-              <p className="success" role="status">
-                {notice}
-              </p>
-            )}
+            <div className={teacher ? "grading-panel review-card review-grade-card" : "review-result"}>
+              {state.user?.role === "teacher" ? (
+                <>
+                  <h3 className="review-grade-heading"><ChartBar size={16} aria-hidden="true" />Grade & feedback</h3>
+                  <div className="review-grade-controls">
+                    <label className="field review-marks-field">
+                      <span>Marks</span>
+                      <div className="marks-input">
+                        <input
+                          disabled={busy}
+                          type="number"
+                          min="0"
+                          max={task.maxMarks}
+                          step="0.5"
+                          value={marks}
+                          onChange={(e) => setMarks(e.target.value)}
+                          placeholder="0"
+                        />
+                        <span>/ {task.maxMarks}</span>
+                      </div>
+                    </label>
+                    <label className="check-field review-publish-field" title="Publish grade to student">
+                      <input
+                        disabled={busy}
+                        type="checkbox"
+                        checked={publish}
+                        onChange={(e) => setPublish(e.target.checked)}
+                      />{" "}
+                      <span>Publish</span>
+                    </label>
+                  </div>
+                  <label className="field review-feedback-field">
+                    <span>Feedback</span>
+                    <textarea
+                      disabled={busy}
+                      rows={teacher ? 2 : 5}
+                      maxLength={4000}
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      placeholder="Share what worked and what to improve…"
+                    />
+                  </label>
+                  <button
+                    className="btn btn-primary full review-save-btn"
+                    onClick={grade}
+                    disabled={
+                      busy ||
+                      marks === "" ||
+                      !Number.isFinite(Number(marks)) ||
+                      Number(marks) < 0 ||
+                      Number(marks) > task.maxMarks
+                    }
+                  >
+                    <FloppyDisk size={18} />
+                    {busy ? "Saving…" : "Save grade"}
+                  </button>
+                  <p className="muted small-text">
+                    Analysis is advisory. You assign the grade.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3>Your result</h3>
+                  {submission.grade?.published ? (
+                    <>
+                      <div className="student-score">
+                        {submission.grade.marks}
+                        <small> / {task.maxMarks}</small>
+                      </div>
+                      <p>
+                        {submission.grade.feedback || "No feedback provided."}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="muted">Awaiting your teacher's grade.</p>
+                  )}
+                </>
+              )}
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              {notice && (
+                <p className="success" role="status">
+                  {notice}
+                </p>
+              )}
+            </div>
           </aside>
         </div>
       </section>
