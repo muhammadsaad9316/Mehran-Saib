@@ -14,6 +14,35 @@ async function compare(page: Page) {
   await expect(page.getByLabel("Roll 1 marks")).toBeEnabled();
 }
 
+test("student blocks show immediate identity tooltips on hover, focus and touch without overflowing", async ({page}, info) => {
+  await signIn(page);
+  const matrix = page.getByRole("group", { name: /^Reliability fixture: .*Each block/ });
+  const first = matrix.getByRole("button", { name: /^Roll no\. 1: Fixture student 1, / });
+  const last = matrix.getByRole("button", { name: "Roll no. 41: Fixture student 41, No submission", exact: true });
+  if (info.project.name === "mobile") await first.tap(); else await first.hover();
+  const tooltip = page.getByRole("tooltip");
+  await expect(tooltip).toBeVisible({timeout:500});
+  await expect(tooltip).toContainText("Fixture student 1");
+  await expect(tooltip).toContainText(/Roll no\. 1 · (Awaiting review|Graded submissions)/);
+  await expect(first).not.toHaveAttribute("title");
+  if (info.project.name === "desktop") {
+    await tooltip.hover();
+    await expect(tooltip).toBeVisible();
+  }
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toBeHidden();
+  await last.focus();
+  await expect(tooltip).toContainText("Fixture student 41");
+  const box = await tooltip.boundingBox();
+  const bounds = await matrix.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(bounds!.x - 1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:`artifacts/student-tooltip-${info.project.name}.png`});
+  await page.getByRole("heading", {name:/^Lab overview/}).click();
+  await expect(tooltip).toBeHidden();
+});
+
 test("selected revision renders protected source/images with bounded asset requests and responsive layout", async ({page})=>{
   let active=0, maximum=0, completed=0;
   await page.route("**/api/submissions/fixture-submission-1/files/**",async route=>{

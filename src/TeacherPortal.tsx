@@ -64,6 +64,22 @@ export default function TeacherPortal({
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState("");
   const [labFilter, setLabFilter] = useState("all");
+  const [matrixStudent, setMatrixStudent] = useState<string | null>(null);
+  useEffect(() => {
+    if (!matrixStudent) return;
+    const dismiss = (event: KeyboardEvent | PointerEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" :
+          !(event.target instanceof Element && event.target.closest(".teacher-matrix-cell"))) {
+        setMatrixStudent(null);
+      }
+    };
+    window.addEventListener("keydown", dismiss);
+    window.addEventListener("pointerdown", dismiss);
+    return () => {
+      window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("pointerdown", dismiss);
+    };
+  }, [matrixStudent]);
   useEffect(() => {
     document.getElementById("teacher-content")?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
@@ -431,10 +447,13 @@ export default function TeacherPortal({
                               </div>
                               <div
                                 className="teacher-submission-matrix"
-                                role="img"
+                                role="group"
                                 aria-label={`${lab.title}: ${count.submitted} of ${students.length} students submitted, ${count.missing} missing. Each block represents one student in roll-number order.`}
+                                onPointerLeave={(event) => {
+                                  if (event.pointerType !== "touch" && !event.currentTarget.contains(document.activeElement)) setMatrixStudent(null);
+                                }}
                               >
-                                {students.map((student) => {
+                                {students.map((student, studentIndex) => {
                                   const work = state.submissions.filter(
                                     (submission) =>
                                       submission.labId === lab.id &&
@@ -447,12 +466,31 @@ export default function TeacherPortal({
                                         )
                                       ? "review"
                                       : "graded";
+                                  const statusLabel = status === "review" ? "Awaiting review" : status === "graded" ? "Graded submissions" : "No submission";
+                                  const key = `${lab.id}-${student.id}`;
+                                  const tooltipId = `student-progress-${key}`;
                                   return (
-                                    <span
+                                    <button
+                                      type="button"
                                       key={student.id}
                                       className={`teacher-matrix-cell ${status}`}
-                                      title={`Roll no. ${student.rollNumber}: ${status === "review" ? "Awaiting review" : status === "graded" ? "Graded submissions" : "No submission"}`}
-                                    />
+                                      aria-label={`Roll no. ${student.rollNumber}: ${student.name}, ${statusLabel}`}
+                                      aria-describedby={matrixStudent === key ? tooltipId : undefined}
+                                      onPointerEnter={(event) => { if (event.pointerType !== "touch") setMatrixStudent(key); }}
+                                      onFocus={() => setMatrixStudent(key)}
+                                      onBlur={() => setMatrixStudent(null)}
+                                      onClick={() => setMatrixStudent(key)}
+                                    >
+                                      {matrixStudent === key && <span
+                                        id={tooltipId}
+                                        role="tooltip"
+                                        className="teacher-matrix-tooltip"
+                                        style={{ left: `clamp(min(110px, 50%), ${(studentIndex + 0.5) / students.length * 100}%, max(50%, calc(100% - 110px)))` }}
+                                      >
+                                        <strong>{student.name}</strong>
+                                        <span>Roll no. {student.rollNumber} · {statusLabel}</span>
+                                      </span>}
+                                    </button>
                                   );
                                 })}
                               </div>

@@ -569,6 +569,7 @@
   text-underline-offset: 4px;
 }
 .teacher-submission-matrix {
+  position: relative;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
@@ -576,10 +577,57 @@
   margin-top: 8px;
 }
 .teacher-matrix-cell {
+  min-width: 0;
   height: 18px;
+  padding: 0;
+  border: 0;
   border-radius: 2px;
   background: var(--workspace-edge);
   box-shadow: inset 0 0 0 1px rgba(68, 68, 56, 0.04);
+  cursor: help;
+}
+.teacher-matrix-cell:hover,
+.teacher-matrix-cell:focus-visible {
+  outline: 2px solid var(--teacher-accent-hover);
+  outline-offset: 2px;
+}
+.teacher-matrix-tooltip {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 10px);
+  width: 220px;
+  max-width: 100%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border: 1px solid var(--teacher-edge);
+  border-radius: 8px;
+  color: var(--teacher-ink);
+  background: var(--teacher-sheet);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: default;
+}
+.teacher-matrix-tooltip::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 10px;
+}
+.teacher-matrix-tooltip strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.teacher-matrix-tooltip > span {
+  display: block;
+  margin-top: 3px;
+  color: var(--teacher-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 .teacher-matrix-cell.graded {
   background: var(--workspace-ink);

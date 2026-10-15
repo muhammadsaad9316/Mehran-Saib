@@ -25,6 +25,8 @@ The frontend is a React 19 TypeScript SPA built by Vite 7 with Tailwind CSS 4 an
 
 Teacher/student portals load through `React.lazy` only when their role is rendered. Suspense uses the existing loading style; the root boundary offers reload if a module cannot load. Login does not download either portal. The unused chart and Recharts dependency were removed.
 
+Dashboard submission blocks show the student's name, roll number and status immediately on hover, keyboard focus or touch. Escape or tapping elsewhere dismisses the tooltip; names come from the authorized roster, with no extra request. Tooltips stay within the progress row at either edge.
+
 ## State and requests
 
 The teacher's submission review fills the viewport, giving the preview and source most of the space. Desktop uses a compact 290px grading sidebar. Mobile stacks the supporting panels below the large preview. Preview and source share a compact tab row; a preview entrypoint selector appears there only for multiple HTML pages. Duplicate filename/browser bars are omitted, and source downloads sit in the tab row beside the source file list. The sidebar displays actual requirement/quality/similarity results and never assigns a grade. Clicking the similarity score or alert opens Code comparison with the highest comparable peer's matching evidence selected and scrolls/focuses that section.
