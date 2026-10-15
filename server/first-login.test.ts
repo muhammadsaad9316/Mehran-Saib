@@ -59,11 +59,12 @@ test("all 41 temporary credentials preserve classroom data, require personal set
     await student.get("/api/submissions/work/files/index.html").expect(403);
     await student.post("/api/submissions").field("labId","lab").field("taskId","task").field("link","https://example.test").expect(403);
     await student.post("/api/auth/password").set("Origin","https://foreign.example.test").send({newPassword:"PersonalFixture2026!"}).expect(403);
-    await student.post("/api/auth/password").send({newPassword:""}).expect(400);
-    await student.post("/api/auth/password").send({newPassword:"   "}).expect(400);
+    for (const newPassword of ["", " ".repeat(6), ...Array.from({length:5}, (_, index) => "x".repeat(index + 1))]) {
+      await student.post("/api/auth/password").send({newPassword}).expect(400);
+    }
     await student.post("/api/auth/password").send({newPassword:"x".repeat(257)}).expect(400);
     await request(app).post("/api/auth/password").send({newPassword:"PersonalFixture2026!"}).expect(401);
-    const saved = await student.post("/api/auth/password").send({newPassword:"7"}).expect(200);
+    const saved = await student.post("/api/auth/password").send({newPassword:"123456"}).expect(200);
     assert.equal(saved.body.mustChangePassword,false);
     assert.notEqual(saved.headers["set-cookie"][0].split(";")[0],oldCookie);
     assert.match(saved.headers["set-cookie"][0],/Max-Age=604800;/);
@@ -76,9 +77,9 @@ test("all 41 temporary credentials preserve classroom data, require personal set
     await student.post("/api/auth/password").send({newPassword:"DifferentFixture2026!"}).expect(400);
     await student.post("/api/auth/logout").expect(200);
     await student.post("/api/auth/login").send({email:"1",password:plan[0].password}).expect(401);
-    await student.post("/api/auth/login").send({email:"1",password:"7"}).expect(200);
+    await student.post("/api/auth/login").send({email:"1",password:"123456"}).expect(200);
     const current = app.locals.store.data as Database;
-    assert.ok(await verifyPassword("7",current.users.find(user=>user.id==="s1")!.passwordHash));
+    assert.ok(await verifyPassword("123456",current.users.find(user=>user.id==="s1")!.passwordHash));
     assert.deepEqual(current.submissions,original.submissions);
     await assert.rejects(applyStudentPasswords(app.locals.store,plan),/Refusing to overwrite/);
   } finally {
@@ -126,7 +127,7 @@ test("41 independent first-password saves coexist in real SQL without changing o
     await request(handler).get("/api/reports.csv").set("Cookie",pendingCookie).expect(403);
     const priorWrites = writes;
     apps.push(...await Promise.all(Array.from({length:41},()=>createApp({production:false,demo:false,mongoUri:"",serverless:true,supabaseUrl:"https://first-login-sql.supabase.co",supabaseKey:"sb_secret_first_login_fixture"}))));
-    await Promise.all(apps.map((app,index)=>request(app).post("/api/auth/password").set("Cookie",`labtrack_session=${String(index+1).padStart(64,"0")}`).send({newPassword:String(index+1)}).expect(200)));
+    await Promise.all(apps.map((app,index)=>request(app).post("/api/auth/password").set("Cookie",`labtrack_session=${String(index+1).padStart(64,"0")}`).send({newPassword:`pass${String(index+1).padStart(2,"0")}`}).expect(200)));
     const result=await sql.query<{pending:number}>("select count(*)::integer as pending from public.labtrack_records where collection='users' and document->>'mustChangePassword'='true'");
     assert.equal(result.rows[0].pending,0);assert.equal(writes-priorWrites,41);assert.equal(conflicts,0);
     const teacher=await sql.query<{document:{passwordHash:string}}>("select document from public.labtrack_records where collection='users' and id='teacher'");

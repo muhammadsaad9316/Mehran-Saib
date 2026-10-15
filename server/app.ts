@@ -49,6 +49,8 @@ import {
 const COOKIE_NAME = "labtrack_session";
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_SETUP_DURATION = 15 * 60 * 1000;
+const LOGIN_ATTEMPT_LIMIT = 5;
+const LOGIN_COOLDOWN_DURATION = 60 * 1000;
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -609,7 +611,7 @@ export async function createApp(options: AppOptions = {}) {
     res.json(state);
   });
 
-  const failures = new Map<string, { count: number; resetAt: number }>();
+  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
   app.post("/api/auth/login", async (req, res) => {
     const email = text(
       req.body?.email,
@@ -623,38 +625,38 @@ export async function createApp(options: AppOptions = {}) {
         : item.email === email,
     );
     const password = passwordValue(req.body?.password);
-    const key = `${req.ip}|${user?.id || email}`;
-    // Unknown identities share one budget so random email addresses cannot fill the limiter table.
+    // Account aliases share a budget; unknown identities cannot create unbounded buckets.
     const sharedKey = createHash("sha256").update(user?.id || "unregistered-account").digest("hex");
-    if (options.serverless && !(await store.loginAttempt(sharedKey)))
-      throw new HttpError(429, "Too many login attempts. Try again in 15 minutes.");
-    const previous = failures.get(key);
-    if (previous && previous.resetAt > Date.now() && previous.count >= 8)
-      throw new HttpError(
-        429,
-        "Too many login attempts. Try again in 15 minutes.",
-      );
-    const valid = user && (await verifyPassword(password, user.passwordHash));
-    if (!valid) {
-      if (failures.size >= 1000) failures.delete(failures.keys().next().value!);
-      failures.set(key, {
-        count:
-          previous && previous.resetAt > Date.now() ? previous.count + 1 : 1,
-        resetAt:
-          previous && previous.resetAt > Date.now()
-            ? previous.resetAt
-            : Date.now() + 15 * 60 * 1000,
-      });
-      throw new HttpError(401, "Email, roll number or password is incorrect.");
+    let allowed: boolean;
+    if (options.serverless) {
+      allowed = await store.loginAttempt(sharedKey);
+    } else {
+      const now = Date.now();
+      const previous = loginAttempts.get(sharedKey);
+      const attempt = previous && previous.resetAt > now
+        ? previous : { count: 0, resetAt: now + LOGIN_COOLDOWN_DURATION };
+      allowed = attempt.count < LOGIN_ATTEMPT_LIMIT;
+      if (allowed) {
+        // Reserve before password verification yields so parallel guesses cannot bypass the limit.
+        attempt.count++;
+        if (attempt.count === LOGIN_ATTEMPT_LIMIT) attempt.resetAt = now + LOGIN_COOLDOWN_DURATION;
+        loginAttempts.set(sharedKey, attempt);
+      }
     }
-    failures.delete(key);
+    if (!allowed) {
+      res.setHeader("Retry-After", "60");
+      throw new HttpError(429, "Too many login attempts. Try again in one minute.");
+    }
+    const valid = user && (await verifyPassword(password, user.passwordHash));
+    if (!valid) throw new HttpError(401, "Email, roll number or password is incorrect.");
+    loginAttempts.delete(sharedKey);
     if (options.serverless) await store.loginAttempt(sharedKey, true);
     await signIn(user, res);
   });
   app.post("/api/auth/password", async (req, res) => {
     const user = actor(res, "student");
     if (!user.mustChangePassword) throw new HttpError(400, "Your personal password is already set.");
-    const password = passwordValue(req.body?.newPassword);
+    const password = passwordValue(req.body?.newPassword, 6);
     if (await verifyPassword(password, user.passwordHash)) throw new HttpError(400, "Choose a new personal password.");
     const passwordHash = await hashPassword(password);
     const authVersion = randomUUID();

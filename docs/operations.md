@@ -33,6 +33,7 @@ Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm 
 | `server/instructions.test.ts` | DOCX/PDF/text extraction and candidate-rule/document bounds |
 | `server/marks-sheet.test.ts` | Roll migration/order, complete totals, zero/blank/fractional marks and words |
 | `server/class-setup.test.ts` | Isolated provisioning, hashed accounts, work retention and refusal to reset passwords |
+| `server/login-security.test.ts`, `server/serverless-login-limit.test.ts` | Parallel login limits, shared account aliases, cooldown timing, successful reset and unavailable limiter rejection |
 | `src/api.test.ts` | Read retries and no write replay |
 | `src/preview.test.ts` | Path resolution and CSP restrictions |
 | `src/student-progress.test.ts` | Student/task scoping and published-grade totals |
@@ -62,7 +63,7 @@ In an isolated environment:
 | Vercel 503 | Confirm server URL/key settings, reachable Supabase, all RPC migrations and startup requirements. Health does not test the database. |
 | `PGRST202` / missing function | Compare migrations/function signatures with [supabase](supabase.md); do not blindly replay already applied SQL. |
 | Login 401 | Correct email/roll/password and existing account; env admin values do not reset passwords. Confirm production HTTPS cookie. |
-| Login 429 | Wait for the 15-minute budget; unknown identities share a serverless bucket. Do not disable limits to work around repeated failures. |
+| Login 429 | Wait one minute after the fifth attempt; blocked requests do not extend the cooldown. Email/roll aliases share a budget, and unknown identities share one bucket. Do not disable limits to work around repeated failures. |
 | Mutation 403 | Role, Origin and `Sec-Fetch-Site`; use same-origin proxy/rewrite. `CLIENT_ORIGIN` alone does not enable cross-site cookies/CORS. |
 | Save 409 | Refresh and review current lab/submission; retry only with current input. Persistent Supabase has one attempt, serverless at most eight. |
 | Upload 400/413 | Paths/types/encoding, 60 files, 1 MiB/source, 4 MiB extracted/request budget and ZIP expansion. Remove hidden/dependency directories. |

@@ -77,7 +77,7 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
       if (body.clear_attempts) { budgets.delete(body.attempt_key); return json(true); }
       const count = (budgets.get(body.attempt_key) || 0) + 1;
       budgets.set(body.attempt_key, count);
-      return json(count <= 8);
+      return json(count <= 5);
     }
     if (body.expected_revision !== revision) return json({ code: "PT409" }, 409);
     for (const item of body.deletions) {
@@ -118,9 +118,9 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
   assert.equal(state.body.students.length, 1);
   const anonymous = await request(handler).get("/api/state").expect(200);
   assert.deepEqual(anonymous.body.submissions, []);
-  for (let n = 0; n < 8; n++)
+  for (let n = 0; n < 5; n++)
     await request(handler).post("/api/auth/login").send({ email: `unknown-${n}@example.test`, password: "wrong" }).expect(401);
-  await request(handler).post("/api/auth/login").send({ email: "another-unknown@example.test", password: "wrong" }).expect(429);
+  await request(handler).post("/api/auth/login").send({ email: "another-unknown@example.test", password: "wrong" }).expect(429).expect("Retry-After", "60");
   assert.equal(budgets.size, 1);
   await login("qa@example.test");
 });

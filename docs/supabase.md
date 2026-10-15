@@ -43,7 +43,7 @@ Supabase secret keys resolve to an elevated server role that bypasses RLS. Expre
 | `labtrack_project(submission_id, expected_revision)` | Exact project revision | Selected source, without private binary bytes |
 | `labtrack_projects(expected_submissions)` | Array of `{id, revision}` | Batch selected source for analysis, all revisions checked |
 | `labtrack_asset(submission_id, expected_revision, asset_path)` | Exact revision/path | One authorized-route file payload |
-| `labtrack_login_attempt(attempt_key text, clear_attempts boolean default false)` | 64-character hex key, optional clear flag | Boolean allow/deny, eight attempts per 15-minute bucket; expired rows cleaned |
+| `labtrack_login_attempt(attempt_key text, clear_attempts boolean default false)` | 64-character hex account key, optional clear flag | Atomically admits five attempts per one-minute bucket; the fifth starts a full one-minute cooldown. Blocked requests do not extend it; successful login clears the bucket. |
 
 Each upsert is `{ collection, id, document, position }`; each deletion is `{ collection, id }`. The server diffs both document content and array position. No-op mutations avoid the write RPC.
 
@@ -70,8 +70,12 @@ Apply these files in order to a **fresh** project before connecting the app:
 | [20261013032620_serverless_login_rate_limit.sql](../supabase/migrations/20261013032620_serverless_login_rate_limit.sql) | `20261013032620` / `serverless_login_rate_limit` |
 | [20261013041432_optimize_free_tier_reads.sql](../supabase/migrations/20261013041432_optimize_free_tier_reads.sql) | `20261013041432` / `optimize_free_tier_reads` |
 | [20261013041643_reserve_auth_capacity.sql](../supabase/migrations/20261013041643_reserve_auth_capacity.sql) | `20261013041643` / `reserve_auth_capacity` |
+| [20261015122901_reliability_payloads.sql](../supabase/migrations/20261015122901_reliability_payloads.sql) | `20261015122901` / `reliability_payloads` |
+| [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql) | Pending application to the hosted project |
 
 The initial file was renamed byte-for-byte to match verified hosted history on 15 October 2026; no reset or replay. The sixth migration, [20261015122901_reliability_payloads.sql](../supabase/migrations/20261015122901_reliability_payloads.sql), was applied and its recorded version matches. Full before/after classroom checksums matched. **Do not run a blind migration push against the existing classroom.** Inspect remote history and function definitions first. Later migrations include non-idempotent `CREATE TABLE/FUNCTION` statements and are not scripts to replay on every startup.
+
+The seventh migration, [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql), changes only the private login limiter. Apply it before deploying the five-attempt policy to Vercel. It preserves the RPC signature and server-only permissions, caps old buckets at five attempts and shortens any remaining old cooldown to at most one minute. Isolated Postgres tests cover the five-attempt budget, fixed cooldown, expiry, clearing and permissions; they do not establish that this migration has been applied to a hosted project.
 
 There is no committed Supabase CLI `config.toml` or fully configured local stack. For a fresh hosted project, an owner can run each reviewed SQL file once through the SQL Editor in the order above; record that manual setup. For tracked deployment through MCP, apply each missing migration with its descriptive name to the selected project. SQL Editor execution itself does not create Supabase CLI migration-history entries.
 

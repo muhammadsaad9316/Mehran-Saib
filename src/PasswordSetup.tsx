@@ -16,6 +16,7 @@ export default function PasswordSetup({ user, onSaved, onLogout, error: workspac
   async function save() {
     if (busy) return;
     setError("");
+    if (password.length < 6) { setError("Use at least 6 characters for your password."); return; }
     if (password !== confirmation) { setError("The passwords do not match. Enter the same password in both boxes."); return; }
     setBusy(true);
     try {
@@ -32,12 +33,12 @@ export default function PasswordSetup({ user, onSaved, onLogout, error: workspac
       <h2>Create your password</h2>
       <p>Welcome, {user.name}. Replace your temporary code with a password only you know.</p>
       <label className="field">New password
-        <input type={visible ? "text" : "password"} required maxLength={256} autoComplete="new-password" autoFocus autoCapitalize="none" spellCheck={false}
+        <input type={visible ? "text" : "password"} required minLength={6} maxLength={256} autoComplete="new-password" autoFocus autoCapitalize="none" spellCheck={false}
           aria-describedby="personal-password-help" value={password} disabled={busy} onChange={event => setPassword(event.target.value)} />
       </label>
-      <p id="personal-password-help" className="password-setup-help">Choose a password you will remember. No minimum length or special characters required.</p>
+      <p id="personal-password-help" className="password-setup-help">Use at least 6 characters. No special characters required.</p>
       <label className="field">Confirm new password
-        <input type={visible ? "text" : "password"} required maxLength={256} autoComplete="new-password" autoCapitalize="none" spellCheck={false}
+        <input type={visible ? "text" : "password"} required minLength={6} maxLength={256} autoComplete="new-password" autoCapitalize="none" spellCheck={false}
           value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} />
       </label>
       <button className="btn password-visibility" type="button" disabled={busy} aria-pressed={visible}

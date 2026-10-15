@@ -9,14 +9,15 @@ test("SQL migrations retain private projects, permit independent stale writes an
     await database.exec("create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to service_role;");
     const directory = new URL("../supabase/migrations/", import.meta.url);
     const names = (await readdir(directory)).filter(name => name.endsWith(".sql")).sort();
-    for (const name of names.slice(0, -1)) await database.exec(await readFile(new URL(name, directory), "utf8"));
+    const payloadMigration = "20261015122901_reliability_payloads.sql";
+    for (const name of names.slice(0, names.indexOf(payloadMigration))) await database.exec(await readFile(new URL(name, directory), "utf8"));
     const project = { id: "submission", studentId: "student", labId: "lab", taskId: "task", revision: 1,
       files: [{ path: "index.html", content: "<h1>Private fixture source</h1>" }],
       binaryAssets: [{ path: "image.png", mimeType: "image/png", base64: "cHJpdmF0ZSBmaXh0dXJl" }] };
     const lab = { id: "lab", revision: 1, tasks: [{ id: "task", maxMarks: 10 }] };
     for (const [collection, document] of [["labs", lab], ["submissions", project]] as const)
       await database.query("insert into public.labtrack_records(collection,id,document,position) values($1,$2,$3,0)", [collection, document.id, JSON.stringify(document)]);
-    const migration = await readFile(new URL(names.at(-1)!, directory), "utf8");
+    const migration = await readFile(new URL(payloadMigration, directory), "utf8");
     await database.exec(migration);
     const value = async (sql: string, params: unknown[] = []) => (await database.query<{ value: unknown }>(sql, params)).rows[0].value;
     const full = await value("select public.labtrack_read() as value") as { revision: number; data: { submissions: typeof project[] } };
@@ -53,5 +54,55 @@ test("SQL migrations retain private projects, permit independent stale writes an
       assert.equal(permission, false);
     }
     assert.equal(await value("select bool_or(prosecdef) as value from pg_proc where proname like 'labtrack_%'"), false);
+  } finally { await database.close(); }
+});
+
+test("SQL login limiter atomically admits five attempts and enforces a full fixed one-minute cooldown", async () => {
+  const database = new PGlite();
+  try {
+    await database.exec("create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to service_role;");
+    const directory = new URL("../supabase/migrations/", import.meta.url);
+    const names = (await readdir(directory)).filter(name => name.endsWith(".sql")).sort();
+    const limiterMigration = "20261015172900_five_attempt_login_cooldown.sql";
+    for (const name of names.slice(0, names.indexOf(limiterMigration))) await database.exec(await readFile(new URL(name, directory), "utf8"));
+    const key = "a".repeat(64);
+    await database.query("insert into public.labtrack_login_limits values ($1, 9, now() + interval '15 minutes')", [key]);
+    await database.exec(await readFile(new URL(limiterMigration, directory), "utf8"));
+    const value = async <T>(sql: string, params: unknown[] = []) => (await database.query<{ value: T }>(sql, params)).rows[0].value;
+    const attempt = (attemptKey = key, clear = false) => value<boolean>("select public.labtrack_login_attempt($1,$2) as value", [attemptKey, clear]);
+    const bucket = () => value<{ attempts: number; reset_at: string }>("select row_to_json(limits) as value from public.labtrack_login_limits limits where key=$1", [key]);
+    assert.equal((await bucket()).attempts, 5);
+    assert.ok(await value<boolean>("select reset_at <= clock_timestamp() + interval '1 minute' as value from public.labtrack_login_limits where key=$1", [key]));
+    assert.equal(await attempt(), false, "old blocked buckets stay blocked for no more than one minute");
+    assert.equal(await attempt(key, true), true);
+    const results = await Promise.all(Array.from({ length: 20 }, () => attempt()));
+    assert.equal(results.filter(Boolean).length, 5, "queued concurrent RPC calls reserve exactly five slots");
+    const blockedBucket = await bucket();
+    assert.equal(blockedBucket.attempts, 5);
+    assert.equal(await attempt(), false);
+    assert.deepEqual(await bucket(), blockedBucket, "blocked attempts neither increment nor extend the bucket");
+    assert.equal(await attempt("b".repeat(64)), true, "a separate account retains its own budget");
+
+    await database.query("update public.labtrack_login_limits set attempts=4, reset_at=now() + interval '5 seconds' where key=$1", [key]);
+    assert.equal(await attempt(), true);
+    assert.ok(await value<boolean>("select reset_at > clock_timestamp() + interval '59 seconds' as value from public.labtrack_login_limits where key=$1", [key]), "the fifth slot starts a full minute even near the initial window boundary");
+    assert.equal(await attempt(), false);
+    await database.query("update public.labtrack_login_limits set reset_at=now() where key=$1", [key]);
+    assert.equal(await attempt(), true, "expiry permits a new budget at the boundary");
+    assert.equal((await bucket()).attempts, 1);
+    assert.equal(await attempt(key, true), true);
+    assert.equal(await value<number>("select count(*)::integer as value from public.labtrack_login_limits where key=$1", [key]), 0);
+    assert.equal(await attempt(), true, "successful authentication clears the budget");
+    for (const invalid of [null, "a".repeat(63), "g".repeat(64)]) {
+      await assert.rejects(value("select public.labtrack_login_attempt($1) as value", [invalid]), (error: { code?: string }) => error.code === "PT400");
+    }
+    for (const role of ["anon", "authenticated"]) {
+      assert.equal(await value("select has_function_privilege($1,'public.labtrack_login_attempt(text,boolean)','EXECUTE') or has_table_privilege($1,'public.labtrack_login_limits','SELECT,INSERT,UPDATE,DELETE') as value", [role]), false);
+    }
+    assert.equal(await value("select has_function_privilege('service_role','public.labtrack_login_attempt(text,boolean)','EXECUTE') as value"), true);
+    const security = (await database.query<{ prosecdef: boolean; proconfig: string[] }>("select prosecdef,proconfig from pg_proc where oid='public.labtrack_login_attempt(text,boolean)'::regprocedure")).rows[0];
+    assert.equal(security.prosecdef, false);
+    assert.ok(security.proconfig.includes('search_path=""'));
+    assert.equal(await value("select relrowsecurity as value from pg_class where oid='public.labtrack_login_limits'::regclass"), true);
   } finally { await database.close(); }
 });
