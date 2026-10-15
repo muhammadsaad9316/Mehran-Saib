@@ -1,6 +1,6 @@
 # Student first-login passwords
 
-Students sign in with their roll number and an individual temporary eight-digit code. Their first login opens **Create your password**. They enter and confirm a personal password of 12–256 characters, then enter the student workspace. Subsequent logins use the same roll number and their personal password. Temporary codes stop working after setup.
+Students sign in with their roll number and an individual temporary eight-digit code. Their first login opens **Create your password**. They enter and confirm any nonblank personal password (1–256 characters), then enter the student workspace. There is no 12-character minimum or character-composition rule. Both entries are visible while typing by default, with a Hide/Show passwords button. Subsequent logins use the same roll number and their personal password. Temporary codes stop working after setup.
 
 Pending accounts can only read their own minimal login state, set a password, sign out or sign in again. Classroom state, source, downloads and mutations remain blocked on the server until setup completes. Setup sessions expire after 15 minutes; ordinary sessions last seven days. Password changes rotate the session and credential version, invalidating previous sessions on the next request. Temporary hashes and setup cookies use distinct formats so older Vercel handlers cannot treat them as ordinary credentials/sessions. Legacy accounts without a credential version remain compatible until explicitly reset.
 

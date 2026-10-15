@@ -12,7 +12,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `GET /api/ready` | Teacher, or Vercel monitor with configured private token | Optional `X-Readiness-Token` for monitor | 200 `{ "ok": true }` after database probe; safe 503 on failure |
 | `GET /api/state` | Public, filtered by session | None | 200 `AppState` |
 | `POST /api/auth/login` | Public | `{ email, password }` | 200 `User` + session cookie |
-| `POST /api/auth/password` | Signed-in student awaiting first setup | `{ newPassword }`, 12–256 characters | 200 `User`, setup completed and session rotated |
+| `POST /api/auth/password` | Signed-in student awaiting first setup | `{ newPassword }`, nonblank 1–256 characters; no composition rule | 200 `User`, setup completed and session rotated |
 | `POST /api/auth/demo` | Loopback demo only | `{ role: "teacher" \| "student" }` | 200 `User` + cookie; production 403 |
 | `POST /api/auth/logout` | Persistent server accepts without session; Vercel requires shaped cookie | No body required | 200 `{ "ok": true }`, session removed/cookie cleared |
 | `POST /api/students` | Teacher | `{ name, email, rollNumber, password }` | 201 `User` |

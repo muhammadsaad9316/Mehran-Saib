@@ -563,7 +563,7 @@ function Login({
       </form>
       <div className="login-access-note"><LockKey size={14} aria-hidden="true" /><span>Your class. Your work. One place.</span></div>
       <a
-        className="quordix-mobile-credit login-mobile-credit"
+        className="quordix-mobile-credit login-mobile-credit auth-quordix-credit"
         href="https://quordix.com"
         target="_blank"
         rel="noopener noreferrer"

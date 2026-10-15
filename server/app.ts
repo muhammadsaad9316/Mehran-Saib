@@ -654,7 +654,7 @@ export async function createApp(options: AppOptions = {}) {
   app.post("/api/auth/password", async (req, res) => {
     const user = actor(res, "student");
     if (!user.mustChangePassword) throw new HttpError(400, "Your personal password is already set.");
-    const password = passwordValue(req.body?.newPassword, 12);
+    const password = passwordValue(req.body?.newPassword);
     if (await verifyPassword(password, user.passwordHash)) throw new HttpError(400, "Choose a new personal password.");
     const passwordHash = await hashPassword(password);
     const authVersion = randomUUID();
