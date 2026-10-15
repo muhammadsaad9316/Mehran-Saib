@@ -15,9 +15,11 @@ import {
 import type { AppState, Lab, Submission, User } from "../shared/types";
 import { api } from "./api";
 import Review from "./Review";
+import type { ReviewQueueMode } from "./review-queue";
 import LabEditor from "./LabEditor";
 import BrandLogo from "./BrandLogo";
 import QuordixLogo from "./QuordixLogo";
+import { allowNavigation } from "./navigation-guard";
 const TeacherPortal = lazy(() => import("./TeacherPortal"));
 const StudentPortal = lazy(() => import("./StudentPortal"));
 const date = (
@@ -41,6 +43,7 @@ function Badge({ status }: { status: string }) {
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [review, setReview] = useState<Submission | null>(null);
+  const [reviewQueueMode, setReviewQueueMode] = useState<ReviewQueueMode>("pending");
   const [editor, setEditor] = useState<Lab | true | null>(null);
   const [upload, setUpload] = useState<Lab | null>(null);
   const [uploadTaskId, setUploadTaskId] = useState("");
@@ -49,6 +52,13 @@ export default function App() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const initialized = useRef(false);
+  const labOperation = useRef("");
+  function openReview(submission: Submission) {
+    setReviewQueueMode(state?.submissions.some((item) =>
+      item.labId === submission.labId && item.taskId === submission.taskId && !item.grade,
+    ) ? "pending" : "all");
+    setReview(submission);
+  }
   async function refresh() {
     const next = await api<AppState>("/state");
     setState(next);
@@ -100,7 +110,11 @@ export default function App() {
     const focusable = 'button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),a[href],summary,iframe,[tabindex]:not([tabindex="-1"])';
     const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusable) || [])
       .filter((el) => el.getClientRects().length && !el.closest("[hidden],[inert]"));
-    if (!managedByEditor) controls()[0]?.focus();
+    if (!managedByEditor) {
+      const initialInput = dialog?.querySelector<HTMLInputElement>("input[data-initial-focus]");
+      (initialInput ?? controls()[0])?.focus({ preventScroll: true });
+      initialInput?.select();
+    }
     const trap = (e: KeyboardEvent) => {
       if (e.key !== "Tab" || managedByEditor) return;
       const items = controls();
@@ -148,6 +162,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", close);
   }, []);
   async function switchRole() {
+    if (!allowNavigation()) return;
     setStudentDetail(null);
     setReview(null);
     setEditor(null);
@@ -169,6 +184,7 @@ export default function App() {
     }
   }
   async function logout() {
+    if (!allowNavigation()) return;
     setStudentDetail(null);
 
     setReview(null);
@@ -189,10 +205,12 @@ export default function App() {
     await api(lab.id ? `/labs/${lab.id}` : "/labs", {
       method: lab.id ? "PATCH" : "POST",
       body: JSON.stringify(lab),
+      headers: lab.id ? undefined : { "Idempotency-Key": labOperation.current ||= crypto.randomUUID() },
     });
-    await refresh();
     setEditor(null);
     setToast(lab.id ? "Lab updated." : "Lab created.");
+    try { await refresh(); }
+    catch (cause) { setError(`The lab was saved, but the workspace could not refresh. ${(cause as Error).message}`); }
   }
   if (!state)
     return (
@@ -232,8 +250,8 @@ export default function App() {
       {teacher ? (
         <TeacherPortal
           state={state}
-          onReview={setReview}
-          onEdit={(lab) => setEditor(lab || true)}
+          onReview={openReview}
+          onEdit={(lab) => { labOperation.current = crypto.randomUUID(); setEditor(lab || true); }}
           onStudent={setStudentDetail}
           onAddStudent={() => setStudentForm(true)}
           onSwitchRole={switchRole}
@@ -249,7 +267,7 @@ export default function App() {
             setUploadTaskId(taskId);
             setUpload(lab);
           }}
-          onReview={setReview}
+          onReview={openReview}
           onSwitchRole={switchRole}
           onLogout={logout}
           onRefresh={refresh}
@@ -269,6 +287,8 @@ export default function App() {
             state.submissions.find((s) => s.id === review.id) || review
           }
           state={state}
+          queueMode={reviewQueueMode}
+          onQueueModeChange={setReviewQueueMode}
           onClose={() => setReview(null)}
           onNavigate={(next) => setReview(next)}
           onSaved={async (message) => {
@@ -291,10 +311,10 @@ export default function App() {
           state={state}
           onClose={() => setUpload(null)}
           onSaved={async () => {
-            await refresh();
             setUpload(null);
-
             setToast("Your work has been submitted.");
+            try { await refresh(); }
+            catch (cause) { setError(`Your work was submitted, but the workspace could not refresh. ${(cause as Error).message}`); }
           }}
         />
       )}
@@ -302,9 +322,10 @@ export default function App() {
         <StudentForm
           onClose={() => setStudentForm(false)}
           onSaved={async () => {
-            await refresh();
             setStudentForm(false);
             setToast("Student added.");
+            try { await refresh(); }
+            catch (cause) { setError(`The student was added, but the workspace could not refresh. ${(cause as Error).message}`); }
           }}
         />
       )}
@@ -385,7 +406,7 @@ export default function App() {
                           disabled={!sub}
                           onClick={() => {
                             setStudentDetail(null);
-                            setReview(sub!);
+                            openReview(sub!);
                           }}
                         >
                           Review <ArrowUpRight size={14} />
@@ -590,6 +611,7 @@ function Upload({
     const data = new FormData();
     data.append("labId", lab.id);
     data.append("taskId", taskId);
+    data.append("expectedRevision", String(existing?.revision || 0));
     if (link) data.append("link", link);
     for (const file of files)
       data.append("files", file, file.webkitRelativePath || file.name);

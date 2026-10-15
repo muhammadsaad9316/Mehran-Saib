@@ -8,17 +8,18 @@ The existing project's public identifier is `akudfcgksdjlipxxwfdu`; its [dashboa
 
 | Table | Columns and constraints | Purpose |
 | --- | --- | --- |
-| `public.labtrack_records` | `collection text`, `id text`, `document jsonb`, `position integer`; PK `(collection,id)` | All classroom/session records |
+| `public.labtrack_records` | `collection text`, `id text`, `document jsonb`, `position integer`; PK `(collection,id)` | Classroom/session metadata; submission source paths without bytes |
+| `public.labtrack_payloads` | `(collection,id)` FK to records, JSONB payload; cascade delete | Full submission text and raster bytes, private |
 | `public.labtrack_meta` | `id smallint` constrained to 1, `revision bigint >= 0`; PK `id` | Single global optimistic-write revision |
 | `public.labtrack_login_limits` | `key text` PK, `attempts integer`, `reset_at timestamptz` | Shared Vercel login attempt budgets |
 
-`collection` is one of `users`, `labs`, `submissions`, `activity`, `sessions`. `document` must be an object with a string `id` matching the row's `id`. `position >= 0` preserves array order when rebuilding the snapshot. Email/roll uniqueness, role membership, task references and grade bounds are application invariants, not independent SQL constraints or foreign keys.
+`collection` is one of `users`, `labs`, `submissions`, `activity`, `sessions`. `document` must be an object with a string `id` matching the row's `id`. `position >= 0` preserves array order when rebuilding the snapshot. Unique indexes also protect user emails/rolls and student/lab/task submission slots. Role membership, task references and grade bounds remain application invariants.
 
 | Collection | Document contents |
 | --- | --- |
 | `users` | Public user fields plus salted `passwordHash` |
 | `labs` | Tasks, requirements and optional base64 instruction attachment |
-| `submissions` | Current source text, private raster base64, revision and optional grade |
+| `submissions` | Source/asset metadata, revision and optional grade; text/base64 live in private payloads |
 | `activity` | Recent workflow events, capped to 100 by the app |
 | `sessions` | Opaque session token as ID, user ID, numeric expiry |
 
@@ -26,7 +27,7 @@ Uploads consume **database** bytes, including base64 overhead. A zero Supabase S
 
 ## Permissions
 
-All three tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. All four RPCs are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
+All four tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. All nine RPCs are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
 
 Supabase secret keys resolve to an elevated server role that bypasses RLS. Express's session, role and ownership checks therefore enforce classroom authorization. Never fix an API error by disabling RLS, granting browser access or adding `SECURITY DEFINER`. See [API key guidance](https://supabase.com/docs/guides/getting-started/api-keys) and [RLS documentation](https://supabase.com/docs/guides/database/postgres/row-level-security). The informational [RLS Enabled No Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) notice fits this server-only design.
 
@@ -37,39 +38,44 @@ Supabase secret keys resolve to an elevated server role that bypasses RLS. Expre
 | `labtrack_read()` | `{}` | `{ revision, data: { users, labs, submissions, activity, sessions } }`, arrays ordered by position/ID |
 | `labtrack_read_if_changed(known_revision bigint default -1)` | `{ known_revision }` | Same full result when changed; `{ revision, data: null }` when unchanged |
 | `labtrack_write(expected_revision bigint, upserts jsonb, deletions jsonb)` | Expected global revision and document diff | Next revision, or `-1` for storage safeguard; `PT409` on conflict |
+| `labtrack_read_compact(known_revision bigint default -1)` | Revision | Metadata only; null data on unchanged revision |
+| `labtrack_write_scoped(expected_revision, upserts, deletions, expected_documents)` | Diff plus expected touched/user/lab records | Next revision; independent stale writes allowed, relevant changes raise PT409 |
+| `labtrack_project(submission_id, expected_revision)` | Exact project revision | Selected source, without private binary bytes |
+| `labtrack_projects(expected_submissions)` | Array of `{id, revision}` | Batch selected source for analysis, all revisions checked |
+| `labtrack_asset(submission_id, expected_revision, asset_path)` | Exact revision/path | One authorized-route file payload |
 | `labtrack_login_attempt(attempt_key text, clear_attempts boolean default false)` | 64-character hex key, optional clear flag | Boolean allow/deny, eight attempts per 15-minute bucket; expired rows cleaned |
 
 Each upsert is `{ collection, id, document, position }`; each deletion is `{ collection, id }`. The server diffs both document content and array position. No-op mutations avoid the write RPC.
 
-The write function locks metadata row 1, checks `expected_revision`, applies deletes/upserts and increments the revision in the same transaction. Stale writes raise custom SQLSTATE `PT409`. Do not change it to `40001`: the prior deployment incident involved PostgREST repeatedly retrying that serialization code. The server retains compatibility handling for `40001`, but the committed SQL uses `PT409`.
+Both write functions lock metadata row 1, apply changes and advance the revision atomically. Legacy writes require an exact global revision. Scoped writes compare expected documents when it changed, protecting touched records and user/lab dependencies while permitting unrelated writes. New submission source is split into payloads; metadata grade updates do not rewrite source. SQL caps activity at 100 and cleans expired/excess sessions. The adapter reloads authoritative metadata after confirmed compact writes before caching it, so pruning and concurrent records cannot corrupt the cache. Stale writes raise custom SQLSTATE `PT409`. Do not change it to `40001`: the prior deployment incident involved PostgREST repeatedly retrying that serialization code. The server retains compatibility handling for `40001`, but the committed SQL uses `PT409`.
 
-The latest storage guard checks `pg_database_size(current_database()) + incoming_lab_and_submission_bytes * 2 >= 400000000`. Rejection returns `-1` normally before any record changes; the adapter maps it to HTTP 507. Users/sessions retain headroom. This is an application threshold, not a precise disk forecast or a provider quota guarantee.
+The latest storage guard checks `pg_database_size(current_database()) + positive_content_growth_bytes * 2 >= 400000000` only when source/attachment content grows. Grade/publication metadata changes and shrinking content stay available. Rejection returns `-1` normally before any record changes; the adapter maps it to HTTP 507. Users/sessions retain headroom. This is an application threshold, not a precise disk forecast or a provider quota guarantee.
 
 ## Concurrency and cache
 
-`Store` owns its loaded revision through `SupabasePersistence`. Persistent Node loads once, uses one write attempt and reloads/returns 409 on conflict. Vercel creates a store per request and reruns mutation validation against fresh records for up to eight write attempts.
+`Store` owns its loaded revision through `SupabasePersistence`. Persistent Node checks revisions before protected requests/login, uses one write attempt and reloads/returns 409 on relevant conflicts. Vercel creates a store per request and reruns mutation validation against fresh records for up to eight write attempts with increasing jitter and a shared 45-second deadline. Lost transport acknowledgements trigger bounded read-only reconciliation rather than write replay. A confirmed write followed by failed refresh is acknowledged, with future access blocked until an authoritative reload succeeds.
 
-A serverless warm-instance cache stores at most one private snapshot capped at 16 MiB and separated by project/credential hash. Every load checks the database revision; unchanged reads return only metadata. Clones isolate requests. A failed connection never authorizes a stale cached snapshot. There is no browser cache or realtime stream of this state.
+A process-local cache stores at most one private metadata snapshot capped at 16 MiB and separated by project/credential hash. Every load checks the database revision; unchanged reads return only metadata. Clones isolate requests. A failed connection never authorizes a stale cached snapshot. There is no browser cache or realtime stream of this state.
 
-Manual database edits must go through an equivalent versioned transaction that advances metadata; changing only `labtrack_records` can evade cache invalidation. Restart persistent Node after external changes. Use controlled maintenance and a backup before direct data repairs.
+Manual database edits must go through an equivalent versioned transaction that advances metadata; changing only `labtrack_records` can evade cache invalidation. Persistent Supabase observes versioned external changes on its next protected request; JSON/MongoDB still need a restart. Use controlled maintenance and a backup before direct data repairs.
 
 ## Migration order and existing history
 
 Apply these files in order to a **fresh** project before connecting the app:
 
-| Repository file | Hosted history version/name observed on 13 October 2026 |
+| Repository file | Hosted history version/name checked on 15 October 2026 |
 | --- | --- |
-| [001_labtrack.sql](../supabase/migrations/001_labtrack.sql) | `20261012094828` / `labtrack_private_persistence` |
+| [20261012094828_labtrack_private_persistence.sql](../supabase/migrations/20261012094828_labtrack_private_persistence.sql) | `20261012094828` / `labtrack_private_persistence` |
 | [20261013022154_fix_labtrack_conflict_retry_loop.sql](../supabase/migrations/20261013022154_fix_labtrack_conflict_retry_loop.sql) | `20261013022154` / `fix_labtrack_conflict_retry_loop` |
 | [20261013032620_serverless_login_rate_limit.sql](../supabase/migrations/20261013032620_serverless_login_rate_limit.sql) | `20261013032620` / `serverless_login_rate_limit` |
 | [20261013041432_optimize_free_tier_reads.sql](../supabase/migrations/20261013041432_optimize_free_tier_reads.sql) | `20261013041432` / `optimize_free_tier_reads` |
 | [20261013041643_reserve_auth_capacity.sql](../supabase/migrations/20261013041643_reserve_auth_capacity.sql) | `20261013041643` / `reserve_auth_capacity` |
 
-The initial local filename does not match hosted migration history. **Do not run a blind migration push against the existing classroom.** Inspect remote history and function definitions first and reconcile the initial identifier as a deliberate maintenance task. Later migrations include non-idempotent `CREATE TABLE/FUNCTION` statements and are not scripts to replay on every startup.
+The initial file was renamed byte-for-byte to match verified hosted history on 15 October 2026; no reset or replay. The sixth migration, [20261015122901_reliability_payloads.sql](../supabase/migrations/20261015122901_reliability_payloads.sql), was applied and its recorded version matches. Full before/after classroom checksums matched. **Do not run a blind migration push against the existing classroom.** Inspect remote history and function definitions first. Later migrations include non-idempotent `CREATE TABLE/FUNCTION` statements and are not scripts to replay on every startup.
 
 There is no committed Supabase CLI `config.toml` or fully configured local stack. For a fresh hosted project, an owner can run each reviewed SQL file once through the SQL Editor in the order above; record that manual setup. For tracked deployment through MCP, apply each missing migration with its descriptive name to the selected project. SQL Editor execution itself does not create Supabase CLI migration-history entries.
 
-For future changes, create a new migration rather than silently modifying old applied files. If using the CLI, inspect the installed version and command help, create the migration with `supabase migration new <name>`, and reconcile the initial history before any push. Test on an independent database, review grants/RLS/function security, then compare remote migration history after applying. Never reset the real classroom to make history match.
+For future changes, create a new migration rather than silently modifying old applied files. If using the CLI, inspect the installed version and command help, create the migration with `supabase migration new <name>`, and inspect the reconciled history before any push. Test on an independent database, review grants/RLS/function security, then compare remote migration history after applying. Never reset the real classroom to make history match.
 
 After all migrations, configure server URL/secret with demo false. A fresh app database needs initial admin credentials; the app then creates the teacher. The fixed-class provisioning script is restricted to the existing project; see [getting started](getting-started.md).
 
@@ -89,7 +95,7 @@ select c.relname, c.relrowsecurity,
        has_table_privilege('authenticated', c.oid, 'SELECT') as authenticated_select
 from pg_class c join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'
-  and c.relname in ('labtrack_records', 'labtrack_meta', 'labtrack_login_limits');
+  and c.relname in ('labtrack_records', 'labtrack_meta', 'labtrack_login_limits', 'labtrack_payloads');
 
 select p.proname, p.prosecdef as security_definer,
        has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
@@ -100,8 +106,10 @@ where n.nspname = 'public' and p.proname like 'labtrack_%';
 
 Expect RLS true, browser privileges false and `security_definer=false`. Avoid `select document` or `labtrack_read()` in public logs: they include password hashes, sessions and source files.
 
-The documentation review confirmed those access properties and all five hosted migrations. Aggregate counts at review were 42 users, 2 labs, 1 submission, 4 activity records and 3 sessions; these are a dated observation and will change. Earlier class-bootstrap notes describe the initial empty-submission setup, not today's contents. No records or grants were changed during documentation.
+The 13 October documentation review confirmed the earlier access properties and five hosted migrations. Aggregate counts at review were 42 users, 2 labs, 1 submission, 4 activity records and 3 sessions; these are a dated observation and will change. Earlier class-bootstrap notes describe the initial empty-submission setup, not today's contents. No records or grants were changed during that documentation review. The separate 15 October implementation added the sixth migration/private payload table; current verification is in [reliability progress](reliability-progress.md).
 
 ## Adapter failures
 
 The transport uses a 15-second timeout and rejects redirects. New `sb_secret_` keys are sent in `apikey`; supported legacy service-role JWTs also use `Authorization: Bearer`. Publishable/anonymous keys are rejected by configuration validation. `PGRST202` prompts applying missing migrations; conflicts use dedicated errors; other failures produce sanitized diagnostics without credential values. Review [operations](operations.md) and current provider docs for environmental errors.
+
+Persistent app startup enables at most three attempts for its initial read, with increasing jittered delays and a shared 45-second deadline. Only transport/body-stream failures and HTTP 502/503/504 qualify. Invalid JSON/database state, configuration, authorization and missing migrations fail immediately. Vercel opens, conflict reloads, login-limit calls and writes do not gain transport retries. Startup never retries the whole app initialization, which can provision or migrate records after opening the store. Exhaustion requires restoring connectivity and restarting the persistent API.

@@ -27,7 +27,17 @@ Teacher/student portals load through `React.lazy` only when their role is render
 
 ## State and requests
 
-The teacher's submission review fills the viewport, giving the preview and source most of the space. Desktop uses a compact 260px grading sidebar; task instructions and analysis are collapsed until opened. Mobile stacks the supporting panels below the large preview. Live preview, source, files and detailed analysis remain separate views. The Files tab lists source and image assets with ownership-checked downloads. The sidebar displays actual requirement/quality/similarity results and never assigns a grade.
+The teacher's submission review fills the viewport, giving the preview and source most of the space. Desktop uses a compact 290px grading sidebar. Mobile stacks the supporting panels below the large preview. Preview and source share a compact tab row; a preview entrypoint selector appears there only for multiple HTML pages. Duplicate filename/browser bars are omitted, and source downloads sit in the tab row beside the source file list. The sidebar displays actual requirement/quality/similarity results and never assigns a grade. Clicking the similarity score or alert opens Code comparison with the highest comparable peer's matching evidence selected and scrolls/focuses that section.
+
+Teachers can switch between the current student's tasks inside review; buttons show marks (including draft grades), Pending, or Missing. Missing work cannot be opened or automatically graded. Switching tasks/students or closing with unsaved marks, feedback or publication changes offers Keep editing or Discard; page exit uses the browser's unsaved-change warning. Navigation is blocked while saving. The selected Pending/All queue filter survives review navigation. Save & Next (also Ctrl/Cmd+Enter) stays in numeric roll order within the task; Pending wraps to earlier ungraded submissions first. At the end of a task, Save & Begin Task N opens the next task with pending work, skipping empty/fully graded tasks and wrapping through the lab's task order before declaring completion. A cross-task transition selects Pending mode. A saved grade followed by a failed state refresh stays on the current review and reports the refresh failure.
+
+Opening a teacher review, changing the student/task or loading a new submission revision focuses the marks input and selects any saved number. Teachers can type a replacement and use Ctrl/Cmd+Enter to save and advance; focus returns to the next submission's marks input. Unsaved-change confirmation retains its own focus behavior.
+
+Check tasks uses one-click task buttons with pending counts from authorized state, independent of the selected analysis/filter. Counts update after state refresh; they do not include missing work. `review-queue.ts` owns review ordering and next-task selection, covered by `review-queue.test.ts`.
+
+Review next ungraded in the progress panel opens the selected lab/task's first ungraded submission in numeric roll order, independent of table searches, filters, sorting and analysis availability. Saved draft/zero grades and missing work are skipped. With no pending submissions, the button reads No ungraded submissions and is disabled. Closing a review and reopening this action resumes at the first remaining submission after saved grades refresh state.
+
+The teacher shell uses a compact 64px header and 24px content inset. Check tasks has a smaller page heading, 12px gaps between controls and a compact progress panel so the student list appears sooner; the toolbar, task buttons and filters retain at least 44px height. The sidebar also groups navigation more closely on wide screens. On phones, task buttons use three columns and the threshold selector shares a row with Refresh.
 
 1. `App.refresh()` calls `api<AppState>("/state")`.
 2. If an unsigned development state says `demo=true`, startup requests the teacher demo then reloads state. Real environments show login.
@@ -35,11 +45,11 @@ The teacher's submission review fills the viewport, giving the preview and sourc
 4. Mutations call the API and reload state. Dialog state/toasts stay in React; records are persisted by the backend.
 5. Manual refresh obtains external changes; there is no automatic polling or realtime update.
 
-`api()` prepends `/api`, sends same-origin cookies and JSON headers unless the body is `FormData`. Errors are `Error` objects with a numeric `status`. Only GETs with an empty/non-JSON 500/502/503 gateway response retry, up to three additional attempts one second apart. JSON API errors, writes and fetch exceptions are not automatically retried.
+`api()` prepends `/api`, sends same-origin cookies and JSON headers unless the body is `FormData`. Errors are `Error` objects with a numeric `status`. Only GETs with an empty/non-JSON 500/502/503 gateway response retry, up to three additional attempts one second apart. JSON API errors, writes and fetch exceptions are not automatically retried. Reads have a 20-second deadline and writes 50 seconds, covering response bodies; caller abort signals cancel work. Failed writes report an uncertain outcome instead of inviting blind replay.
 
-Do not set multipart `Content-Type` manually: the browser must generate its boundary. Folder upload filenames include relative paths. Full state contains authorized source text, so avoid copying it into extra persistent browser storage or logs.
+Do not set multipart `Content-Type` manually: the browser must generate its boundary. Folder upload filenames include relative paths. State contains source paths and empty content, with `sourceOmitted=true`. `submission-source.ts` loads only the selected revision's text, while `submission-assets.ts` progressively loads images with at most four requests per project. Do not persist source or state in browser storage/logs.
 
-Analysis/evidence are attached to task-description/requirements and submission-ID/revision fingerprints, with cancellation on replacement. Stale results are immediately hidden. Grade forms send the displayed revision, disable edits while saving and refresh on HTTP 409. A successful save followed by failed refresh explicitly reports that the grade was saved.
+Analysis/evidence are attached to task-description/requirements and submission-ID/revision fingerprints, with cancellation on replacement. Stale results are immediately hidden. Grade forms send the displayed revision, disable edits while saving and refresh on HTTP 409. Successful mutations are acknowledged before refreshing state; a failed refresh explicitly reports that the save succeeded. New-lab operation keys survive uncertain responses. Full lab drafts, uploads and grades include their displayed revision/timestamp guards. Comparison tracks both panes' drafts and active saves, guarding navigation, refresh, logout and page unload.
 
 ## Styling and accessibility
 
@@ -56,6 +66,8 @@ User-facing dates use `en-GB` formatting in `Asia/Karachi`. `LabEditor` interpre
 ## Marks-sheet downloads
 
 Teachers can download a formatted Excel marks sheet from the lab library or class register; CSV and the printable marks sheet remain available beside it. Excel preserves column widths, wrapping, orange headings and frozen headers. CSV contains only values and cannot retain spreadsheet formatting.
+
+Print marks sheet opens a lab picker with the current lab checked. Select one lab for roll number, name, each task's saved marks and the lab total. Select multiple labs for roll number, name, each selected lab's total and an overall total; task columns are omitted. Preview opens before Print / Save PDF, and Choose labs returns to the picker with the selection preserved. Reports include saved draft grades and zero marks; a total stays blank until all its tasks/labs are graded. Printing includes the full roster regardless of the class register's search/filter. Larger reports use A4 landscape and a horizontally scrollable preview on phones. CSV and Excel retain their existing single-lab format.
 
 ## Submitted-code preview
 

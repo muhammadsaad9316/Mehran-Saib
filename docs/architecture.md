@@ -24,7 +24,9 @@ flowchart TB
 
 The Vercel handler checks database configuration first. Health, unsigned state and unsigned protected requests then avoid database reads. A correctly shaped cookie triggers a database-backed request; shape alone never authenticates the user. Express validates the current session against the loaded records.
 
-Serverless reads check the global revision each time. An unchanged revision reuses a cloned private snapshot capped at 16 MiB; a changed revision reloads records. Failed connections do not use stale cache. Persistent servers do not refresh per request and need restart after external database edits.
+Serverless reads check the global revision each time. An unchanged revision reuses a cloned private snapshot capped at 16 MiB; a changed revision reloads records. Failed connections do not use stale cache. Persistent Supabase refreshes the revision before protected requests and login. JSON/MongoDB keep a process snapshot; external changes there still require a restart.
+
+Persistent startup retries only the initial Supabase read on transient failures: at most three attempts within 45 seconds, each request limited to 15 seconds. It does not retry app bootstrap writes, later conflict reloads or serverless reads. Configuration/migration/data errors fail immediately; an exhausted startup needs a manual or supervised restart. See [local Supabase recovery](supabase-local.md#development-behavior).
 
 ## Repository map
 
@@ -70,9 +72,9 @@ erDiagram
   SUBMISSION ||--o| GRADE : embeds
 ```
 
-These are logical relationships, not separate SQL tables or foreign keys. Tasks/requirements are inside labs; grades are inside submissions. Supabase stores the five collections as JSONB documents in one table.
+These are logical relationships, not separate SQL tables or foreign keys. Tasks/requirements are inside labs; grades are inside submissions. Supabase stores five collections as JSONB metadata documents, with submission source and binary bytes in a separate private payload table.
 
-Public `User` excludes `passwordHash`; public `Submission` excludes binary base64. Server `Database` contains these private fields and sessions. Authorized state includes source text and instruction base64; image bytes use authenticated downloads. Teachers see all students/labs/submissions/activity. Students see themselves, published labs and their own work, with draft grades removed.
+Public `User` excludes `passwordHash`; public `Submission` excludes binary base64. Server `Database` contains these private fields and sessions. Authorized state includes file paths with empty content and sourceOmitted=true, plus instruction base64. Selected source and images use authenticated, revision-checked reads. Teachers see all students/labs/submissions/activity. Students see themselves, published labs and their own work, with draft grades removed.
 
 ## Invariants
 
@@ -97,7 +99,7 @@ sequenceDiagram
   Student->>API: Multipart task files/link + cookie
   API->>API: Check role, published task, paths and budgets
   API->>Store: mutate cloned records
-  Store->>DB: labtrack_write(expected_revision, diff)
+  Store->>DB: labtrack_write_scoped(expected_revision, guards, diff)
   DB-->>Store: New global revision
   API-->>Student: Submission revision N, grade cleared
   Teacher->>API: Read and analyze project
@@ -109,6 +111,6 @@ sequenceDiagram
   API-->>Student: Grade only when published
 ```
 
-Persistent Supabase conflicts reload then return 409 after one attempt. Serverless mutations reload and rerun validation for up to eight attempts with jitter. Never replay a stale snapshot or introduce an unbounded retry.
+Scoped SQL compares touched records plus user/lab authorization dependencies, permitting independent writes despite a changed global revision. Persistent conflicts reload then return 409 after one attempt. Serverless conflicts reload and rerun validation for up to eight attempts with increasing jitter and a shared 45-second budget. Never replay a stale snapshot or introduce an unbounded retry.
 
-The frontend refreshes state after mutations. There is no background polling, realtime socket, client router or global state library. See [frontend](frontend.md) and [backend](backend.md).
+Lost write acknowledgements trigger a bounded read-only reconciliation, never an automatic transport replay. A confirmed write followed by a failed reload remains acknowledged, and subsequent access must reload successfully. The frontend acknowledges saves separately from state refresh failures. There is no background polling, realtime socket, client router or global state library. See [frontend](frontend.md) and [backend](backend.md).

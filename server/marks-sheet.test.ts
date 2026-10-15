@@ -5,9 +5,11 @@ import { load } from "cheerio";
 import { marksSheetXlsx } from "./marks-sheet-xlsx.js";
 import {
   buildMarksSheet,
+  buildPrintMarksSheet,
   marksInWords,
   marksSheetCsv,
   marksSheetHtml,
+  marksSheetSelectionHtml,
 } from "./marks-sheet.js";
 import {
   canonicalRollNumber,
@@ -105,20 +107,61 @@ test("marks sheets use numeric roll order, complete task totals, and blank incom
   assert.equal(worksheet('c[r="B8"]').attr("t"), "inlineStr");
   assert.equal(worksheet('c[r="B8"] t').text(), "=TEST()");
   assert.equal(worksheet("f").length, 0);
-  assert.match(
-    marksSheetHtml({
-      ...sheet,
-      rows: [
-        {
-          rollNumber: "1",
-          name: "<script>alert(1)</script>",
-          marks: null,
-          words: "",
-        },
-      ],
-    }),
-    /&lt;script&gt;/,
-  );
+});
+
+test("print one lab with task marks, or multiple labs with lab totals, preserving incomplete and zero grades", () => {
+  const students: User[] = [10, 2, 1].map((roll) => ({
+    id: `s${roll}`, name: roll === 10 ? "<script>bad()</script>" : `Student ${roll}`,
+    email: `${roll}@example.test`, role: "student", rollNumber: String(roll),
+  }));
+  const labs: Lab[] = [1, 2].map((number) => ({
+    id: `lab${number}`, title: `Lab ${number} <content>`, description: "", dueDate: "",
+    published: true, totalMarks: 20,
+    tasks: [1, 2].map((task) => ({
+      id: `t${task}`, title: `Task ${task}`, description: "", maxMarks: 10, requirements: [],
+    })),
+  }));
+  function work(roll: number, lab: number, task: number, marks?: number): Submission {
+    return {
+      id: `${roll}-${lab}-${task}`, studentId: `s${roll}`, labId: `lab${lab}`, taskId: `t${task}`,
+      files: [], link: null, submittedAt: "2026-10-15", revision: 1, late: false,
+      status: marks === undefined ? "submitted" : "graded",
+      ...(marks === undefined ? {} : { grade: { marks, feedback: "", published: false, gradedAt: "2026-10-15" } }),
+    };
+  }
+  const submissions = [
+    work(1, 1, 1, 0), work(1, 1, 2, 0), work(1, 2, 1, 0), work(1, 2, 2, 0),
+    work(2, 1, 1, 8.5), work(2, 1, 2, 9.25), work(2, 2, 1, 7), work(2, 2, 2, 8),
+    work(10, 1, 1, 5), work(10, 1, 2),
+  ];
+  const single = buildPrintMarksSheet([{ lab: labs[0], labNumber: 1 }], students, submissions);
+  assert.deepEqual(single.columns, [{ label: "Task 1", maximum: 10 }, { label: "Task 2", maximum: 10 }]);
+  assert.equal(single.totalMaximum, 20);
+  assert.deepEqual(single.rows.map(({ rollNumber, marks, total }) => ({ rollNumber, marks, total })), [
+    { rollNumber: "1", marks: [0, 0], total: 0 },
+    { rollNumber: "2", marks: [8.5, 9.25], total: 17.75 },
+    { rollNumber: "10", marks: [5, null], total: null },
+  ]);
+  const multiple = buildPrintMarksSheet(labs.map((lab, index) => ({ lab, labNumber: index + 1 })), students, submissions);
+  assert.deepEqual(multiple.columns, [{ label: "Lab 1", maximum: 20 }, { label: "Lab 2", maximum: 20 }]);
+  assert.equal(multiple.totalMaximum, 40);
+  assert.deepEqual(multiple.rows.map(({ marks, total }) => ({ marks, total })), [
+    { marks: [0, 0], total: 0 }, { marks: [17.75, 15], total: 32.75 }, { marks: [null, null], total: null },
+  ]);
+  const incomplete = buildPrintMarksSheet(labs.map((lab, index) => ({ lab, labNumber: index + 1 })), students,
+    submissions.filter((submission) => submission.labId === "lab1"));
+  assert.deepEqual(incomplete.rows[1].marks, [17.75, null]);
+  assert.equal(incomplete.rows[1].total, null);
+  const html = marksSheetHtml(multiple, "/api/reports/print?select=1&labId=lab1");
+  const doc = load(html);
+  assert.deepEqual(doc("thead th").map((_, el) => doc(el).contents().first().text()).get(), ["R. No", "Name", "Lab 1", "Lab 2", "Total"]);
+  assert.deepEqual(doc("tbody tr").last().find("td").map((_, el) => doc(el).text()).get(), ["10", "<script>bad()</script>", "", "", ""]);
+  assert.equal(doc("script").length, 0);
+  assert.equal(doc(".print-controls a").attr("href"), "/api/reports/print?select=1&labId=lab1");
+  const selection = load(marksSheetSelectionHtml(labs, ["lab2"]));
+  assert.equal(selection('input:checked').attr("value"), "lab2");
+  assert.equal(selection("content").length, 0);
+  assert.equal(selection('form').attr("action"), "/api/reports/print");
 });
 test("marks in words supports the configured maximum and fractional grades", () => {
   assert.equal(marksInWords(24), "Twenty-four");

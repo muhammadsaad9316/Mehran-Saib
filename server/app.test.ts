@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
+import { load } from "cheerio";
 import type { Express } from "express";
 import { createApp } from "./app.js";
 import type { Submission } from "../shared/types.js";
@@ -462,6 +463,32 @@ test("CSV matches the lab marks sheet and escapes potential spreadsheet formulas
   await teacher.get("/api/reports.csv?labId=unknown").expect(404);
 });
 
+test("print selection and previews enforce teacher access and canonical lab ordering", async () => {
+  const choose = await teacher.get("/api/reports/print?select=1&labId=lab2").expect(200);
+  const form = load(choose.text);
+  assert.equal(form('input:checked').attr("value"), "lab2");
+  assert.ok(form('input[name="labId"]').length >= 2);
+  assert.equal(form("table").length, 0);
+  const empty = await teacher.get("/api/reports/print").expect(200);
+  assert.match(empty.text, /Choose one lab/);
+  const single = load((await teacher.get("/api/reports/print?labId=lab2").expect(200)).text);
+  assert.match(single("thead").text(), /Task 1/);
+  assert.equal(single("tbody tr").length, 41);
+  const multiple = await teacher.get("/api/reports/print?labId=lab2&labId=lab1&labId=lab2").expect(200);
+  const doc = load(multiple.text);
+  assert.equal(multiple.headers["cache-control"], "no-store");
+  assert.deepEqual(doc("thead th").map((_, el) => doc(el).contents().first().text()).get(), ["R. No", "Name", "Lab 1", "Lab 2", "Total"]);
+  assert.equal(doc("tbody tr").length, 41);
+  assert.equal(doc("tbody tr").first().find("td").first().text(), "1");
+  assert.equal(doc("tbody tr").last().find("td").first().text(), "41");
+  await request(app).get("/api/reports/print?select=1").expect(401);
+  await student.get("/api/reports/print?select=1").expect(403);
+  await student.get("/api/reports/print?labId=lab1&labId=lab2").expect(403);
+  await teacher.get("/api/reports/print?labId=unknown").expect(404);
+  await teacher.get("/api/reports/print?labId=lab1&labId=unknown").expect(404);
+  await teacher.get("/api/reports/print?labId=").expect(404);
+});
+
 test("Excel marks sheets are teacher-only attachments and reject unknown labs", async () => {
   const workbook = await teacher.get("/api/reports.xlsx?labId=lab2")
     .buffer(true)
@@ -612,7 +639,7 @@ test("teachers can publish and edit a manually reviewed lab without automatic ch
     .field("labId", created.body.id).field("taskId", task.id)
     .attach("files", Buffer.from("<h1>My course</h1>"), "course.html").expect(201);
   await teacher.patch(`/api/labs/${created.body.id}`)
-    .send({ tasks: [{ ...task, description: "Create an introduction to your course." }] }).expect(200);
+    .send({ revision: created.body.revision, tasks: [{ ...task, description: "Create an introduction to your course." }] }).expect(200);
   const state = await student.get("/api/state").expect(200);
   const savedLab = state.body.labs.find((lab: { id: string }) => lab.id === created.body.id);
   assert.equal(savedLab.published, true);

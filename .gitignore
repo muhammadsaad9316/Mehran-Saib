@@ -12,4 +12,5 @@ data/
 supabase/.temp/
 *.log
 artifacts/
+*.enc.json
 

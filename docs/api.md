@@ -9,6 +9,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | Method and path | Access | Request | Success |
 | --- | --- | --- | --- |
 | `GET /api/health` | Public | None | 200 `{ "ok": true }` |
+| `GET /api/ready` | Teacher, or Vercel monitor with configured private token | Optional `X-Readiness-Token` for monitor | 200 `{ "ok": true }` after database probe; safe 503 on failure |
 | `GET /api/state` | Public, filtered by session | None | 200 `AppState` |
 | `POST /api/auth/login` | Public | `{ email, password }` | 200 `User` + session cookie |
 | `POST /api/auth/demo` | Loopback demo only | `{ role: "teacher" \| "student" }` | 200 `User` + cookie; production 403 |
@@ -17,14 +18,15 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `POST /api/labs` | Teacher | Full editable lab body | 201 `Lab` |
 | `PATCH /api/labs/:id` | Teacher | Partial lab fields; `tasks` replaces the array | 200 `Lab` |
 | `POST /api/instructions/analyze` | Teacher | `{ instructionFile: { name, content, contentType } }` | 200 `{ tasks, notice, text }` draft; not persisted |
-| `POST /api/submissions` | Student | Multipart `labId`, `taskId`, optional `link`, repeated `files` | 201 `Submission`, including resubmission |
-| `PATCH /api/submissions/:id/grade` | Teacher | `{ marks, feedback, published, revision }` | 200 `Submission` |
+| `POST /api/submissions` | Student | Multipart `labId`, `taskId`, optional `link`, `expectedRevision`, repeated `files` | 201 `Submission`, including resubmission |
+| `PATCH /api/submissions/:id/grade` | Teacher | `{ marks, feedback, published, revision, expectedGradeAt? }` | 200 `Submission` |
 | `GET /api/labs/:id/analysis?taskId=...` | Teacher | Required task ID | 200 `TaskAnalysis` |
 | `GET /api/submissions/:id/analysis?peerId=...` | Teacher or owning student in a published lab | Optional targeted peer ID | 200 `AnalysisResult`; students receive no peers |
+| `GET /api/submissions/:id/source?revision=N` | Teacher or owning student in a published lab | Required current revision | 200 authorized source; 409 if revision changed |
 | `GET /api/submissions/:id/files/*filename` | Teacher or owning student in a published lab | Encoded relative file path | 200 attachment bytes |
 | `GET /api/reports.csv?labId=...` | Teacher | Optional lab ID; first lab by default | 200 CSV attachment |
 | `GET /api/reports.xlsx?labId=...` | Teacher | Optional lab ID; first lab by default | 200 styled Excel workbook attachment |
-| `GET /api/reports/print?labId=...` | Teacher | Optional lab ID; first lab by default | 200 printable HTML |
+| `GET /api/reports/print?labId=...` | Teacher | Repeat `labId` to include multiple labs; no IDs or `select=1` opens the lab picker | 200 selection page or printable HTML |
 
 There are no delete, registration, reset-password, student-update or separate lab/submission-list endpoints. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
 
@@ -44,7 +46,7 @@ There are no delete, registration, reset-password, student-update or separate la
 - Unsigned state contains empty arrays and no user. Local demo state can report `demo=true`.
 - Teachers receive the roster, all labs, all submissions and activity.
 - Students receive only themselves in `students`, published labs and their own submissions for those labs. Draft grades are removed and their status appears `submitted`.
-- Password hashes, session records and binary asset base64 never appear in state. Source text and instruction base64 do appear for authorized records. Asset metadata is `{ path, mimeType }`; fetch bytes through the protected file route.
+- Password hashes, session records and binary asset base64 never appear in state. State includes instruction base64 and file paths with empty content plus `sourceOmitted=true`. Source is loaded on demand through the protected source endpoint. Asset metadata is `{ path, mimeType }`; fetch bytes through the protected file route.
 
 ## Login and student creation
 
@@ -81,9 +83,9 @@ Example for a new lab:
 }
 ```
 
-Backend generates the lab ID, generates missing task/rule IDs, validates uniqueness within the lab/task and computes `totalMarks`. Keep supplied IDs stable on edits. `dueDate` may be empty; otherwise it must parse and is normalized to ISO. `published` must be a boolean.
+An optional UUID `Idempotency-Key` header scopes creation to this teacher/operation: identical replay returns the same lab; different content returns 409. Backend generates the lab ID, generates missing task/rule IDs, validates uniqueness within the lab/task and computes `totalMarks`. Keep supplied IDs stable on edits. `dueDate` may be empty; otherwise it must parse and is normalized to ISO. `published` must be a boolean.
 
-Optional `instructionFile` is `{ name, content, contentType }`; `content` is raw base64, without a data-URL prefix. Accepted filenames: PDF, DOC, DOCX, TXT, MD. Decoded size is at most 3 MiB. PATCH merges omitted fields from the old lab; a supplied task array replaces the whole array. Setting `instructionFile` to null removes it. Tasks with submissions cannot be removed; existing grade marks cannot exceed a reduced maximum. Concurrent serverless lab changes return 409.
+Optional `instructionFile` is `{ name, content, contentType }`; `content` is raw base64, without a data-URL prefix. Accepted filenames: PDF, DOC, DOCX, TXT, MD. Decoded size is at most 3 MiB. PATCH merges omitted fields from the old lab; a supplied task array replaces the whole array. Setting `instructionFile` to null removes it. Tasks with submissions cannot be removed; existing grade marks cannot exceed a reduced maximum. Full task edits send the loaded lab `revision` (legacy labs use 0); saved revisions increment. Stale revisions or changes during a save return 409. Partial scalar updates remain supported.
 
 | Field | Bound |
 | --- | --- |
@@ -105,13 +107,14 @@ Browser example using the existing request helper:
 const body = new FormData();
 body.append("labId", lab.id);
 body.append("taskId", task.id);
+body.append("expectedRevision", String(currentSubmission?.revision || 0));
 body.append("files", file, "project/index.html");
 await api<Submission>("/submissions", { method: "POST", body });
 ```
 
 Upload filenames preserve relative project paths. At least one source file or an HTTP(S) link is required; images alone without a link do not satisfy that condition. Links cannot embed credentials. A remote link is stored, never fetched/analyzed by the server.
 
-The selected lab/task must be published. New work starts at revision 1. Replacement keeps the submission ID, increments revision, sets the new timestamp/late flag and removes the old grade. This does not preserve old files or earlier versions. Accepted types and budgets are in [analysis.md](analysis.md).
+The selected lab/task must be published. New work starts at revision 1. The UI sends `expectedRevision`: 0 for new work, otherwise the displayed current revision; a mismatch returns 409. Replacement keeps the submission ID, increments revision, sets the new timestamp/late flag and removes the old grade. This does not preserve old files or earlier versions. Accepted types and budgets are in [analysis.md](analysis.md).
 
 ## Save a grade
 
@@ -119,13 +122,13 @@ The selected lab/task must be published. New work starts at revision 1. Replacem
 { "marks": 8.5, "feedback": "Review the document title.", "published": false, "revision": 1 }
 ```
 
-Marks must be finite and within `0..task.maxMarks`; zero is a valid grade. Feedback is optional/empty or up to 4,000 characters. Publication is a required boolean. Revision is a required safe positive integer matching current work. Successful saves set `status="graded"` and add `gradedAt`; drafts remain private. Stale revisions return 409 and must be reviewed again, not blindly retried.
+Marks must be finite and within `0..task.maxMarks`; zero is a valid grade. Feedback is optional/empty or up to 4,000 characters. Publication is a required boolean. Revision is a required safe positive integer matching current work. The UI also sends `expectedGradeAt` (the displayed `gradedAt` or an empty string); changed grades return 409. Successful saves set `status="graded"` and add `gradedAt`; drafts remain private. Stale revisions return 409 and must be reviewed again, not blindly retried.
 
 ## Analysis and exports
 
-`TaskAnalysis` contains task ID, per-submission revision/requirements/quality summary, sorted pairs with both coverage percentages and `comparable`, and scan notices. `AnalysisResult` contains detailed requirement results, `met`/`total`, quality, summary and similarities with up to three sample matching blocks. A returned positive pair is not necessarily eligible for a UI flag. See [analysis](analysis.md).
+`TaskAnalysis` contains task ID, per-submission revision/requirements/quality summary, sorted pairs with both coverage percentages and `comparable`, and scan notices. `AnalysisResult` contains detailed requirement results, `met`/`total`, quality, summary and similarities with up to three sample matching blocks. Both analysis contracts return `evidenceVersion`, derived from current task requirements and submission IDs/revisions; the client must match its displayed fingerprint. Individual review can supply a `revision` query. A returned positive pair is not necessarily eligible for a UI flag. See [analysis](analysis.md).
 
-Downloads check ownership, encode path segments, set attachment disposition and `nosniff`. Reports use roll-number order and four columns. A lab total is blank until every task has a saved grade; draft grades count for teacher reports. HTML is escaped and CSV formula prefixes are protected. Excel exports store names as literal text and marks as numbers, with merged titles, wide wrapped columns, orange table headings, alternating rows, frozen headings and filters. A4 printing fits the columns to the page width, repeats the headings and allows multiple pages to keep text legible. Report headings are currently fixed to Fall 2026, BS Computer Science, Semester 7th, Web Engineering and the reference college.
+File downloads accept a current `revision` query and reject mismatches. Downloads check ownership, encode path segments, set attachment disposition and `nosniff`. Reports use roll-number order and four columns. A lab total is blank until every task has a saved grade; draft grades count for teacher reports. HTML is escaped and CSV formula prefixes are protected. Excel exports store names as literal text and marks as numbers, with merged titles, wide wrapped columns, orange table headings, alternating rows, frozen headings and filters. A4 printing fits the columns to the page width, repeats the headings and allows multiple pages to keep text legible. Report headings are currently fixed to Fall 2026, BS Computer Science, Semester 7th, Web Engineering and the reference college.
 
 ## Error contract
 
@@ -143,7 +146,7 @@ Downloads check ownership, encode path segments, set attachment disposition and 
 | 413 | Body, extracted content or text file too large |
 | 429 | Login attempt budget exhausted |
 | 500 | Unexpected Express error, returned with a generic message |
-| 503 | Missing local key, missing Vercel configuration or Vercel setup/load failure |
+| 503 | Missing configuration, unavailable persistence/readiness, or unconfirmed write outcome; refresh before repeating an uncertain mutation |
 | 507 | Supabase classroom-content storage safeguard rejected a save |
 
-API responses have `Cache-Control: no-store`. Health is liveness, not a database-integrity/readiness guarantee. Origin validation rejects cross-site mutations; it does not authorize access. Do not retry mutation errors automatically.
+API responses have `Cache-Control: no-store` and generated `X-Request-Id`; unexpected errors include a safe request ID. Logs contain categories, never database bodies. Health is liveness, not a database-integrity/readiness guarantee. Origin validation rejects cross-site mutations; it does not authorize access. Do not retry mutation errors automatically.

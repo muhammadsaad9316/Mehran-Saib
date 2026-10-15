@@ -14,14 +14,20 @@ import type {
   User,
 } from "../shared/types.js";
 import { analyzeSubmission, analyzeTaskSubmissions } from "./analysis.js";
+import { evidenceVersion } from "../shared/evidence.js";
+import { logFailure } from "./diagnostics.js";
+import { stableJson } from "./serialization.js";
+import { SupabaseConflictError, SupabaseUnavailableError, SupabaseWriteUnconfirmedError } from "./supabase.js";
 import {
   canonicalRollNumber,
   renumberLegacyStudents,
 } from "../shared/roster.js";
 import {
   buildMarksSheet,
+  buildPrintMarksSheet,
   marksSheetCsv,
   marksSheetHtml,
+  marksSheetSelectionHtml,
 } from "./marks-sheet.js";
 import { marksSheetXlsx } from "./marks-sheet-xlsx.js";
 import { analyzeInstructions } from "./instructions.js";
@@ -132,11 +138,16 @@ function publicUser(user: StoredUser): User {
 function publicSubmission(
   submission: StoredSubmission,
   teacher: boolean,
+  includeSource = true,
 ): Submission {
   const { binaryAssets: _, ...safe } = submission;
   if (!teacher && safe.grade && !safe.grade.published) {
     delete safe.grade;
     safe.status = "submitted";
+  }
+  if (!includeSource) {
+    safe.files = safe.files.map(file => ({ path: file.path, content: "" }));
+    safe.sourceOmitted = true;
   }
   return safe;
 }
@@ -285,6 +296,7 @@ function validateLab(body: unknown, old?: Lab): Lab {
   }
   return {
     id: old?.id || randomUUID(),
+    revision: (old?.revision || 0) + 1,
     title,
     description,
     dueDate: dueDate ? new Date(dueDate).toISOString() : "",
@@ -338,11 +350,12 @@ export async function createApp(options: AppOptions = {}) {
       path.join(rootDir, ".data"),
     mongoUri,
     supabaseUrl && supabaseKey
-      ? { url: supabaseUrl, secretKey: supabaseKey, cache: options.serverless }
+      ? { url: supabaseUrl, secretKey: supabaseKey, cache: true, compact: true }
       : undefined,
     options.serverless ? 8 : 1,
   );
-  await store.open();
+  // Bootstrap below can write; only the initial read is safe to retry.
+  await store.open(!options.serverless);
   if (
     production &&
     store.data.users.some(
@@ -446,6 +459,8 @@ export async function createApp(options: AppOptions = {}) {
     });
   }
   app.use((req, res, next) => {
+    res.locals.requestId = randomUUID();
+    res.setHeader("X-Request-Id", res.locals.requestId);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "same-origin");
@@ -455,7 +470,11 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.use(express.json({ limit: "8mb" }));
   app.use(cookieParser());
-  app.use("/api", (req, res, next) => {
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  app.use("/api", async (req, res, next) => {
+    const currentToken = req.cookies[options.sessionCookieName ?? COOKIE_NAME];
+    if (!options.serverless && ((typeof currentToken === "string" && /^[a-f0-9]{64}$/.test(currentToken)) || req.path === "/auth/login")) await store.refresh();
+    else await store.ensureFresh();
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.get("origin");
       const trustedOrigin = options.clientOrigin || process.env.CLIENT_ORIGIN;
@@ -538,7 +557,14 @@ export async function createApp(options: AppOptions = {}) {
     res.json(publicUser(user));
   }
 
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  app.get("/api/ready", async (_req, res) => {
+    actor(res, "teacher");
+    try { await store.ready(); res.json({ ok: true }); }
+    catch (error) {
+      logFailure(error, "readiness", res.locals.requestId);
+      res.status(503).json({ error: "The database is temporarily unavailable.", requestId: res.locals.requestId });
+    }
+  });
   app.get("/api/state", (_req, res) => {
     const user = res.locals.user as StoredUser | undefined;
     const teacher = user?.role === "teacher";
@@ -566,7 +592,7 @@ export async function createApp(options: AppOptions = {}) {
                     (lab) => lab.id === item.labId && lab.published,
                   )),
             )
-            .map((item) => publicSubmission(item, teacher))
+            .map((item) => publicSubmission(item, teacher, false))
         : [],
       activity: teacher ? store.data.activity : [],
     };
@@ -679,17 +705,28 @@ export async function createApp(options: AppOptions = {}) {
     res.status(201).json(publicUser(user));
   });
   app.post("/api/labs", async (req, res) => {
-    actor(res, "teacher");
+    const user = actor(res, "teacher");
     const lab = validateLab(req.body);
-    await store.mutate((data) => {
+    const operationKey = req.get("Idempotency-Key");
+    if (operationKey && !/^[a-f0-9-]{36}$/i.test(operationKey)) throw new HttpError(400, "Invalid save operation key.");
+    if (operationKey) lab.id = createHash("sha256").update(`${user.id}:create-lab:${operationKey}`).digest("hex");
+    const result = await store.mutate((data) => {
+      const existing = data.labs.find(item => item.id === lab.id);
+      if (existing) {
+        const { id: _, revision: __, ...original } = existing;
+        const { id: ___, revision: ____, ...incoming } = lab;
+        if (stableJson(original) !== stableJson(incoming)) throw new HttpError(409, "This save operation already created a lab. Refresh before making another edit.");
+        return existing;
+      }
       data.labs.push(lab);
       addActivity(
         data,
         "lab",
         `${lab.title} ${lab.published ? "published" : "saved as draft"}`,
       );
+      return lab;
     });
-    res.status(201).json(lab);
+    res.status(201).json(result);
   });
   app.post("/api/instructions/analyze", async (req, res) => {
     actor(res, "teacher");
@@ -708,9 +745,13 @@ export async function createApp(options: AppOptions = {}) {
     actor(res, "teacher");
     const old = store.data.labs.find((item) => item.id === req.params.id);
     if (!old) throw new HttpError(404, "Lab not found.");
+    const expectedRevision = req.body?.revision ?? (req.body?.tasks ? 0 : old.revision || 0);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
+      throw new HttpError(400, "A valid lab revision is required.");
     const lab = validateLab({ ...old, ...req.body }, old);
     await store.mutate((data) => {
-      if (JSON.stringify(data.labs.find((item) => item.id === old.id)) !== JSON.stringify(old))
+      if ((data.labs.find((item) => item.id === old.id)?.revision || 0) !== expectedRevision ||
+          JSON.stringify(data.labs.find((item) => item.id === old.id)) !== JSON.stringify(old))
         throw new HttpError(409, "This lab changed. Refresh before saving again.");
       for (const submission of data.submissions.filter(
         (item) => item.labId === lab.id,
@@ -785,6 +826,9 @@ export async function createApp(options: AppOptions = {}) {
           "Upload at least one HTML/CSS/JS/text file or provide a project link.",
         );
       const submittedAt = new Date().toISOString();
+      const expectedRevision = req.body?.expectedRevision === undefined ? undefined : Number(req.body.expectedRevision);
+      if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0))
+        throw new HttpError(400, "Invalid previous submission revision.");
       const result = await store.mutate((data) => {
         const currentLab = data.labs.find(
           (item) => item.id === labId && item.published,
@@ -803,6 +847,8 @@ export async function createApp(options: AppOptions = {}) {
             item.labId === labId &&
             item.taskId === taskId,
         );
+        if (expectedRevision !== undefined && (old?.revision || 0) !== expectedRevision)
+          throw new HttpError(409, "Your submission already changed. Refresh and review the current work before replacing it.");
         const submission: StoredSubmission = {
           id: old?.id || randomUUID(),
           studentId: user.id,
@@ -866,6 +912,8 @@ export async function createApp(options: AppOptions = {}) {
           409,
           "This student has resubmitted. Refresh and review the new revision before grading.",
         );
+      if (req.body?.expectedGradeAt !== undefined && req.body.expectedGradeAt !== (submission.grade?.gradedAt || ""))
+        throw new HttpError(409, "This grade already changed. Refresh before editing it again.");
       const currentTask = data.labs
         .find((lab) => lab.id === submission.labId)
         ?.tasks.find((item) => item.id === submission.taskId);
@@ -890,17 +938,20 @@ export async function createApp(options: AppOptions = {}) {
     });
     res.json(publicSubmission(result, true));
   });
-  app.get("/api/labs/:id/analysis", (req, res) => {
+  app.get("/api/labs/:id/analysis", async (req, res) => {
     actor(res, "teacher");
     const lab = store.data.labs.find((item) => item.id === req.params.id);
     if (!lab) throw new HttpError(404, "Lab not found.");
     const task = lab.tasks.find((item) => item.id === req.query.taskId);
     if (!task) throw new HttpError(404, "Task not found.");
-    res.json(analyzeTaskSubmissions(store.data.submissions.filter((submission) => submission.labId === lab.id && submission.taskId === task.id), task));
+    const submissions = await store.projects(store.data.submissions.filter((submission) => submission.labId === lab.id && submission.taskId === task.id));
+    res.json({ ...analyzeTaskSubmissions(submissions, task), evidenceVersion: evidenceVersion(task, submissions) });
   });
-  app.get("/api/submissions/:id/analysis", (req, res) => {
+  app.get("/api/submissions/:id/analysis", async (req, res) => {
     const user = actor(res);
     const submission = accessibleSubmission(req.params.id as string, res);
+    if (req.query.revision !== undefined && String(submission.revision) !== req.query.revision)
+      throw new HttpError(409, "This submission changed. Refresh before reviewing its evidence.");
     const task = store.data.labs
       .find((lab) => lab.id === submission.labId)
       ?.tasks.find((item) => item.id === submission.taskId);
@@ -915,23 +966,29 @@ export async function createApp(options: AppOptions = {}) {
               (!req.query.peerId || item.id === req.query.peerId),
           )
         : [];
-    res.json(analyzeSubmission(submission, peers, task));
+    const [project, ...projects] = await store.projects([submission, ...peers]);
+    res.json({ ...analyzeSubmission(project, projects, task), evidenceVersion: evidenceVersion(task, [project, ...projects]) });
   });
-  app.get("/api/submissions/:id/files/*filename", (req, res) => {
+  app.get("/api/submissions/:id/source", async (req, res) => {
     const submission = accessibleSubmission(req.params.id as string, res);
+    if (String(submission.revision) !== req.query.revision) throw new HttpError(409, "This submission changed. Refresh before reviewing it.");
+    const [project] = await store.projects([submission]);
+    res.json(publicSubmission(project, actor(res).role === "teacher"));
+  });
+  app.get("/api/submissions/:id/files/*filename", async (req, res) => {
+    const submission = accessibleSubmission(req.params.id as string, res);
+    if (req.query.revision !== undefined && String(submission.revision) !== req.query.revision)
+      throw new HttpError(409, "This submission changed. Refresh before loading its files.");
     const filename = safeFilePath(
       Array.isArray(req.params.filename)
         ? req.params.filename.join("/")
         : (req.params.filename as string),
     );
-    const file = submission.files.find((item) => item.path === filename);
-    const asset = submission.binaryAssets?.find(
-      (item) => item.path === filename,
-    );
-    if (!file && !asset) throw new HttpError(404, "File not found.");
+    const file = await store.file(submission, filename);
+    if (!file) throw new HttpError(404, "File not found.");
     res.attachment(filename.split("/").pop()!);
-    res.type(asset?.mimeType || "text/plain");
-    res.send(asset ? Buffer.from(asset.base64, "base64") : file!.content);
+    res.type(file.mimeType);
+    res.send("base64" in file && typeof file.base64 === "string" ? Buffer.from(file.base64, "base64") : "content" in file ? file.content : "");
   });
   app.get(["/api/reports.csv", "/api/reports.xlsx"], (req, res) => {
     actor(res, "teacher");
@@ -962,23 +1019,34 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.get("/api/reports/print", (req, res) => {
     actor(res, "teacher");
-    const index =
-      typeof req.query.labId === "string"
-        ? store.data.labs.findIndex((lab) => lab.id === req.query.labId)
-        : 0;
-    const lab = store.data.labs[index];
-    if (!lab) throw new HttpError(404, "Lab not found.");
+    const rawIds = req.query.labId;
+    if (rawIds !== undefined && typeof rawIds !== "string" &&
+        !(Array.isArray(rawIds) && rawIds.every((id) => typeof id === "string"))) {
+      throw new HttpError(400, "Choose valid lab IDs.");
+    }
+    const ids = rawIds === undefined ? [] : typeof rawIds === "string" ? [rawIds] : rawIds as string[];
+    if (ids.some((id) => !store.data.labs.some((lab) => lab.id === id))) {
+      throw new HttpError(404, "Lab not found.");
+    }
     res.setHeader("Cache-Control", "no-store");
+    if (req.query.select === "1" || ids.length === 0) {
+      res.type("html").send(marksSheetSelectionHtml(store.data.labs, ids));
+      return;
+    }
+    const labs = store.data.labs.map((lab, index) => ({ lab, labNumber: index + 1 }))
+      .filter(({ lab }) => ids.includes(lab.id));
+    const selection = new URLSearchParams({ select: "1" });
+    labs.forEach(({ lab }) => selection.append("labId", lab.id));
     res
       .type("html")
       .send(
         marksSheetHtml(
-          buildMarksSheet(
-            lab,
-            index + 1,
+          buildPrintMarksSheet(
+            labs,
             store.data.users,
             store.data.submissions,
           ),
+          `/api/reports/print?${selection}`,
         ),
       );
   });
@@ -1004,6 +1072,15 @@ export async function createApp(options: AppOptions = {}) {
         res.status(error.status).json({ error: error.message });
         return;
       }
+      if (error instanceof SupabaseConflictError) {
+        res.status(409).json({ error: "The reviewed records changed. Refresh the workspace before continuing." });
+        return;
+      }
+      if (error instanceof SupabaseUnavailableError || error instanceof SupabaseWriteUnconfirmedError) {
+        logFailure(error, "unconfirmed_request", res.locals.requestId);
+        res.status(503).json({ error: "The save could not be confirmed. Refresh the workspace before repeating it.", uncertain: true, requestId: res.locals.requestId });
+        return;
+      }
       if (error instanceof multer.MulterError) {
         res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
           error:
@@ -1020,10 +1097,10 @@ export async function createApp(options: AppOptions = {}) {
         res.status(413).json({ error: "Request is too large." });
         return;
       }
-      console.error("LabTrack request failed:", error);
+      logFailure(error, "request", res.locals.requestId);
       res
         .status(500)
-        .json({ error: "The request could not be saved. Try again." });
+        .json({ error: "The request could not be confirmed. Refresh before repeating a save.", requestId: res.locals.requestId });
     },
   );
   return app;

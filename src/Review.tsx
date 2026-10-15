@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   Code,
@@ -13,27 +13,33 @@ import {
   CaretLeft,
   ArrowRight,
   Clock,
-  Globe,
 } from "@phosphor-icons/react";
 import type { AppState, AnalysisResult, Submission } from "../shared/types";
-import { byRollNumber } from "../shared/roster";
+import { reviewQueue, type ReviewQueueMode } from "./review-queue";
 import { api, saveFile } from "./api";
 import { buildPreview, resolvePath } from "./preview";
 import { useSubmissionAssets } from "./submission-assets";
+import { evidenceVersion } from "../shared/evidence";
+import { useSubmissionSource } from "./submission-source";
 
 export default function Review({
-  submission,
+  submission: summary,
   state,
   onClose,
   onSaved,
   onNavigate,
+  queueMode,
+  onQueueModeChange,
 }: {
   submission: Submission;
   state: AppState;
   onClose: () => void;
   onSaved: (message?: string) => Promise<void>;
   onNavigate?: (submission: Submission) => void;
+  queueMode: ReviewQueueMode;
+  onQueueModeChange: (mode: ReviewQueueMode) => void;
 }) {
+  const { project: submission, loading: sourceLoading, error: sourceError } = useSubmissionSource(summary);
   const lab = state.labs.find((l) => l.id === submission.labId)!;
   const task = lab.tasks.find((t) => t.id === submission.taskId)!;
   const student =
@@ -54,26 +60,38 @@ export default function Review({
   const [marks, setMarks] = useState(String(submission.grade?.marks ?? ""));
   const [feedback, setFeedback] = useState(submission.grade?.feedback || "");
   const [publish, setPublish] = useState(submission.grade?.published ?? true);
+  const [savedForm, setSavedForm] = useState(() => ({ marks, feedback, publish }));
+  const [leaveTarget, setLeaveTarget] = useState<{ submission?: Submission } | null>(null);
+  const stayButton = useRef<HTMLButtonElement>(null);
+  const leaveOrigin = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [peer, setPeer] = useState<
     AnalysisResult["similarities"][number] | null
   >(null);
-  const analysisFingerprint = JSON.stringify([
-    submission.id,
-    task.description,
-    task.requirements,
-    state.submissions
-      .filter((item) => item.labId === lab.id && item.taskId === task.id)
-      .map((item) => `${item.id}:${item.revision}`)
-      .sort(),
-  ]);
+  const comparisonSection = useRef<HTMLElement>(null);
+  const htmlFiles = submission.files.filter((item) => /\.html?$/i.test(item.path));
+  useEffect(() => {
+    if (tab !== "analysis" || !peer) return;
+    comparisonSection.current?.focus({ preventScroll: true });
+    comparisonSection.current?.scrollIntoView({ block: "start" });
+  }, [tab, peer]);
+  const analysisFingerprint = evidenceVersion(task, state.submissions.filter(item => item.labId === lab.id && item.taskId === task.id));
   const analysis = analysisResult?.fingerprint === analysisFingerprint ? analysisResult.value : null;
   const highestMatch = analysis?.similarities.find((match) => match.comparable);
   const highestPeerStudent = highestMatch
     ? state.students.find((s) => s.id === highestMatch.studentId)
     : null;
+  function openSimilarity() {
+    if (!highestMatch) return;
+    setPeer(highestMatch);
+    setTab("analysis");
+    if (tab === "analysis") {
+      comparisonSection.current?.focus({ preventScroll: true });
+      comparisonSection.current?.scrollIntoView({ block: "start" });
+    }
+  }
   useEffect(() => {
     if (state.user?.role !== "teacher") return;
     let active = true;
@@ -81,10 +99,11 @@ export default function Review({
     setAnalysisResult(null);
     setAnalysisError("");
     setPeer(null);
-    api<AnalysisResult>(`/submissions/${submission.id}/analysis`, {
+    api<AnalysisResult>(`/submissions/${submission.id}/analysis?revision=${submission.revision}`, {
       signal: controller.signal,
     })
       .then((a) => {
+        if (a.evidenceVersion !== analysisFingerprint) throw new Error("The review evidence changed. Refresh the workspace before grading.");
         if (active) setAnalysisResult({ fingerprint: analysisFingerprint, value: a });
       })
       .catch((e) => {
@@ -121,19 +140,10 @@ export default function Review({
     return () => window.removeEventListener("message", handler);
   }, [entry, submission.files]);
 
-  const allTaskSubmissions = useMemo(() => {
-    const studentMap = new Map(state.students.map((s) => [s.id, s]));
-    return state.submissions
-      .filter(
-        (s) => s.labId === submission.labId && s.taskId === submission.taskId,
-      )
-      .sort((a, b) => {
-        const studentA = studentMap.get(a.studentId);
-        const studentB = studentMap.get(b.studentId);
-        if (studentA && studentB) return byRollNumber(studentA, studentB);
-        return 0;
-      });
-  }, [state.submissions, state.students, submission.labId, submission.taskId]);
+  const { allTaskSubmissions, activeQueue, nextSubmission, prevSubmission, nextTaskSubmission } = useMemo(
+    () => reviewQueue(lab, state.students, state.submissions, submission, queueMode),
+    [lab, state.students, state.submissions, submission, queueMode],
+  );
 
   const pendingSubmissions = useMemo(
     () => allTaskSubmissions.filter((s) => !s.grade),
@@ -144,65 +154,58 @@ export default function Review({
   const totalCount = allTaskSubmissions.length;
   const gradedCount = totalCount - remainingCount;
 
-  // Default to pending mode if there are pending submissions
-  const [queueMode, setQueueMode] = useState<"pending" | "all">(() =>
-    remainingCount > 0 ? "pending" : "all",
-  );
-
-  const activeQueue = useMemo(() => {
-    if (queueMode === "all") return allTaskSubmissions;
-    return allTaskSubmissions.filter(
-      (s) => !s.grade || s.id === submission.id,
-    );
-  }, [allTaskSubmissions, queueMode, submission.id]);
-
   const currentQueueIndex = activeQueue.findIndex((s) => s.id === submission.id);
   const currentPosition = currentQueueIndex >= 0 ? currentQueueIndex + 1 : 1;
 
-  const nextSubmission = useMemo(() => {
-    const currentAllIndex = allTaskSubmissions.findIndex(
-      (s) => s.id === submission.id,
-    );
-    if (queueMode === "pending") {
-      if (currentAllIndex >= 0) {
-        // Next ungraded after current
-        const after = allTaskSubmissions
-          .slice(currentAllIndex + 1)
-          .find((s) => !s.grade && s.id !== submission.id);
-        if (after) return after;
-        // Wrap around if teacher started grading in the middle
-        const before = allTaskSubmissions
-          .slice(0, currentAllIndex)
-          .find((s) => !s.grade && s.id !== submission.id);
-        if (before) return before;
-      }
-      return null;
-    }
-    return currentAllIndex >= 0 && currentAllIndex < allTaskSubmissions.length - 1
-      ? allTaskSubmissions[currentAllIndex + 1]
-      : null;
-  }, [allTaskSubmissions, queueMode, submission.id]);
-
-  const prevSubmission = useMemo(() => {
-    const currentAllIndex = allTaskSubmissions.findIndex(
-      (s) => s.id === submission.id,
-    );
-    if (queueMode === "pending") {
-      if (currentAllIndex > 0) {
-        const before = allTaskSubmissions
-          .slice(0, currentAllIndex)
-          .reverse()
-          .find((s) => !s.grade && s.id !== submission.id);
-        if (before) return before;
-      }
-      return null;
-    }
-    return currentAllIndex > 0 ? allTaskSubmissions[currentAllIndex - 1] : null;
-  }, [allTaskSubmissions, queueMode, submission.id]);
-
-  const nextStudent = nextSubmission
-    ? state.students.find((s) => s.id === nextSubmission.studentId)
+  const advanceTarget = nextSubmission ?? nextTaskSubmission;
+  const nextTaskNumber = nextTaskSubmission
+    ? lab.tasks.findIndex((item) => item.id === nextTaskSubmission.taskId) + 1 : null;
+  const nextStudent = advanceTarget
+    ? state.students.find((s) => s.id === advanceTarget.studentId)
     : null;
+  const dirty = teacher && (marks !== savedForm.marks || feedback !== savedForm.feedback || publish !== savedForm.publish);
+
+  function leave(target: { submission?: Submission }) {
+    if (target.submission) onNavigate?.(target.submission);
+    else onClose();
+  }
+  function requestLeave(target: { submission?: Submission } = {}) {
+    if (busy) return;
+    if (dirty) {
+      leaveOrigin.current = document.activeElement as HTMLElement | null;
+      setLeaveTarget(target);
+    }
+    else leave(target);
+  }
+  function keepEditing() {
+    setLeaveTarget(null);
+    // Wait until the task/student buttons have been enabled again.
+    requestAnimationFrame(() => leaveOrigin.current?.focus());
+  }
+  useEffect(() => {
+    if (leaveTarget) stayButton.current?.focus();
+  }, [leaveTarget]);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (leaveTarget) keepEditing();
+      else requestLeave();
+    };
+    const onUnload = (event: BeforeUnloadEvent) => {
+      if (dirty || busy) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("keydown", onEscape, true);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("keydown", onEscape, true);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, [dirty, busy, leaveTarget, onClose, onNavigate]);
 
   const isMarksValid =
     marks !== "" &&
@@ -210,7 +213,7 @@ export default function Review({
     Number(marks) >= 0 &&
     Number(marks) <= task.maxMarks;
 
-  const canSave = !busy && isMarksValid;
+  const canSave = !busy && !leaveTarget && isMarksValid && !sourceLoading && !sourceError;
 
 
   async function grade(advance = false) {
@@ -226,10 +229,12 @@ export default function Review({
           feedback,
           published: publish,
           revision: submission.revision,
+          expectedGradeAt: submission.grade?.gradedAt || "",
         }),
       });
 
-      const nextTarget = advance ? nextSubmission : null;
+      setSavedForm({ marks, feedback, publish });
+      const nextTarget = advance && onNavigate ? advanceTarget : null;
       const statusText = publish ? "Grade published" : "Draft saved";
       const rollText = student.rollNumber ? `Roll ${student.rollNumber}` : (student.name || "student");
       const wasLastPending = queueMode === "pending" && !nextTarget;
@@ -237,22 +242,24 @@ export default function Review({
       try {
         await onSaved(
           nextTarget
-            ? `${statusText} for ${rollText}. Loading next remaining student…`
+            ? `${statusText} for ${rollText}. Loading ${nextTarget.taskId !== task.id ? `Task ${nextTaskNumber}, ` : ""}Roll ${nextStudent?.rollNumber || ""}…`
             : wasLastPending
-              ? `🎉 All submissions for ${task.title} have been graded!`
+              ? `All submitted work in ${lab.title} has been graded.`
               : (publish ? "Grade published to the student." : "Grade saved as a draft.")
         );
       } catch (cause) {
         setError(`The grade was saved, but the workspace could not refresh. ${cause instanceof Error ? cause.message : "Refresh before grading again."}`);
+        return;
       }
 
       if (advance) {
         if (nextTarget && onNavigate) {
+          if (nextTarget.taskId !== task.id) onQueueModeChange("pending");
           onNavigate(nextTarget);
         } else {
           setNotice(
             queueMode === "pending"
-              ? `🎉 All submissions for ${task.title} are now graded! (${totalCount}/${totalCount} complete)`
+              ? "All submitted work in this lab is graded. Missing work remains ungraded."
               : "Grade saved! You have reached the last student submission for this task."
           );
         }
@@ -285,13 +292,13 @@ export default function Review({
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         if (canSave) {
           e.preventDefault();
-          grade(Boolean(nextSubmission));
+          grade(true);
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [teacher, canSave, nextSubmission, marks, feedback, publish]);
+  }, [teacher, canSave, advanceTarget, marks, feedback, publish, queueMode]);
   const reviewHeader = (
     <header className="modal-head">
       <div className="review-head-main">
@@ -336,7 +343,9 @@ export default function Review({
                 <button
                   type="button"
                   className={`review-mode-btn ${queueMode === "pending" ? "active" : ""}`}
-                  onClick={() => setQueueMode("pending")}
+                  onClick={() => onQueueModeChange("pending")}
+                  aria-pressed={queueMode === "pending"}
+                  disabled={busy || !!leaveTarget}
                   title="Skip checked students and only view remaining unchecked work"
                 >
                   <span
@@ -349,7 +358,9 @@ export default function Review({
                 <button
                   type="button"
                   className={`review-mode-btn ${queueMode === "all" ? "active" : ""}`}
-                  onClick={() => setQueueMode("all")}
+                  onClick={() => onQueueModeChange("all")}
+                  aria-pressed={queueMode === "all"}
+                  disabled={busy || !!leaveTarget}
                   title="View all submissions in roll order"
                 >
                   <span>All ({totalCount})</span>
@@ -360,8 +371,8 @@ export default function Review({
                 <button
                   type="button"
                   className="review-queue-arrow"
-                  disabled={!prevSubmission || busy}
-                  onClick={() => prevSubmission && onNavigate?.(prevSubmission)}
+                  disabled={!prevSubmission || !onNavigate || busy || !!leaveTarget}
+                  onClick={() => prevSubmission && requestLeave({ submission: prevSubmission })}
                   title={
                     prevSubmission
                       ? `Previous ${queueMode === "pending" ? "remaining" : "student"}: Roll ${state.students.find((s) => s.id === prevSubmission.studentId)?.rollNumber || ""}`
@@ -387,8 +398,8 @@ export default function Review({
                 <button
                   type="button"
                   className="review-queue-arrow"
-                  disabled={!nextSubmission || busy}
-                  onClick={() => nextSubmission && onNavigate?.(nextSubmission)}
+                  disabled={!nextSubmission || !onNavigate || busy || !!leaveTarget}
+                  onClick={() => nextSubmission && requestLeave({ submission: nextSubmission })}
                   title={
                     nextSubmission
                       ? `Next ${queueMode === "pending" ? "remaining" : "student"}: Roll ${nextStudent?.rollNumber || ""}`
@@ -431,7 +442,8 @@ export default function Review({
       <button
         className={`icon-btn${teacher ? " review-mobile-close" : ""}`}
         aria-label="Close review"
-        onClick={onClose}
+        onClick={() => requestLeave()}
+        disabled={busy}
       >
         <X size={22} />
       </button>
@@ -441,7 +453,7 @@ export default function Review({
     <div
       className={`modal-overlay${teacher ? " review-overlay" : ""}`}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestLeave();
       }}
     >
       <section
@@ -458,7 +470,27 @@ export default function Review({
         <div className="review-layout">
           <div className="review-workspace">
             {teacher && reviewHeader}
-            <div className="tabs">
+            {teacher && (
+              <div className="review-task-navigation">
+                <div className="review-task-switcher" role="group" aria-label="This student's lab tasks">
+                  {lab.tasks.map((item, index) => {
+                    const work = state.submissions.find((entry) => entry.labId === lab.id && entry.taskId === item.id && entry.studentId === student.id);
+                    const status = !work ? "Missing" : work.grade ? `${work.grade.marks}/${item.maxMarks}${work.grade.published ? "" : " · Draft"}` : "Pending";
+                    return <button key={item.id} type="button" aria-pressed={item.id === task.id}
+                      disabled={!work || !onNavigate || busy || !!leaveTarget} title={item.title}
+                      onClick={() => work && work.id !== submission.id && requestLeave({ submission: work })}>
+                      <span>Task {index + 1}</span><small>{status}</small>
+                    </button>;
+                  })}
+                </div>
+                {leaveTarget && <div className="review-unsaved" role="alert">
+                  <span>You have unsaved marks or feedback.</span>
+                  <button type="button" ref={stayButton} onClick={keepEditing}>Keep editing</button>
+                  <button type="button" onClick={() => leave(leaveTarget)}>Discard & {leaveTarget.submission ? "switch" : "close"}</button>
+                </div>}
+              </div>
+            )}
+            <div className="tabs review-tabs">
               {[
                 ["preview", Eye, "Live preview"],
                 ["code", Code, "Source code"],
@@ -476,32 +508,22 @@ export default function Review({
                   </button>
                 );
               })}
+              {tab === "preview" && htmlFiles.length > 1 && (
+                <select className="review-entry-selector" aria-label="Preview HTML entrypoint" value={entry} onChange={(event) => setEntry(event.target.value)}>
+                  {htmlFiles.map((item) => <option key={item.path}>{item.path}</option>)}
+                </select>
+              )}
+              {tab === "code" && file && (
+                <button className="icon-btn review-source-download" aria-label="Download source file" title={`Download ${file}`}
+                  onClick={() => saveFile(file.split("/").pop()!, submission.files.find((item) => item.path === file)?.content || "")}>
+                  <DownloadSimple size={18} />
+                </button>
+              )}
             </div>
             {tab === "preview" && (
               <>
-                <div className="file-bar">
-                  <FileCode size={17} />
-                  <select
-                    aria-label="Preview HTML entrypoint"
-                    value={entry}
-                    onChange={(e) => setEntry(e.target.value)}
-                  >
-                    {submission.files
-                      .filter((f) => /\.html?$/i.test(f.path))
-                      .map((f) => (
-                        <option key={f.path}>{f.path}</option>
-                      ))}
-                  </select>
-                </div>
                 {entry ? (
                   <div className={teacher ? "review-browser" : "review-preview"}>
-                    {teacher && (
-                      <div className="review-browser-bar" aria-hidden="true">
-                        <span className="review-browser-dots"><i /><i /><i /></span>
-                        <span className="review-browser-address"><Globe size={14} />{entry}</span>
-                        <ShieldCheck size={16} />
-                      </div>
-                    )}
                   <iframe
                     id="submission-preview"
                     title="Student project preview"
@@ -535,6 +557,8 @@ export default function Review({
                     External resources are blocked in this preview.
                   </p>
                 )}
+                {sourceLoading && <p role="status">Loading this revision's source…</p>}
+                {sourceError && <p className="error" role="alert">{sourceError}</p>}
                 {assetError && <p className="error" role="alert">{assetError}</p>}
               </>
             )}
@@ -563,24 +587,6 @@ export default function Review({
                   )}
                 </aside>
                 <div className="source">
-                  <div className="file-bar">
-                    <span>{file || "No source files"}</span>
-                    {file && (
-                      <button
-                        className="icon-btn"
-                        aria-label="Download source file"
-                        onClick={() =>
-                          saveFile(
-                            file.split("/").pop()!,
-                            submission.files.find((f) => f.path === file)
-                              ?.content || "",
-                          )
-                        }
-                      >
-                        <DownloadSimple size={18} />
-                      </button>
-                    )}
-                  </div>
                   <pre>
                     {(
                       submission.files.find((f) => f.path === file)?.content ??
@@ -646,11 +652,29 @@ export default function Review({
                         </div>
                       ))}
                     </div>
+                    <section ref={comparisonSection} className="review-code-comparison" tabIndex={-1} aria-label="Code comparison">
                     <h3>Code comparison</h3>
                     <p className="muted">
                       Similarity is a review signal. Shared lab instructions can
                       produce similar code; these results never change marks.
                     </p>
+                    {peer && (
+                      <div className="matching-evidence">
+                        <h4>Matching evidence · Roll {state.students.find((item) => item.id === peer.studentId)?.rollNumber || "—"}</h4>
+                        {peer.matchingBlocks.length ? (
+                          peer.matchingBlocks.map((block, index) => (
+                            <div className="fields-2" key={index}>
+                              <pre>{block.source}</pre>
+                              <pre>{block.peer}</pre>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="muted">
+                            Comparison based on normalized structure; no long matching source block.
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {analysis.similarities.length ? (
                       analysis.similarities.slice(0, 5).map((s) => (
                         <button
@@ -693,24 +717,7 @@ export default function Review({
                         No comparable peer code was found for this task.
                       </p>
                     )}
-                    {peer && (
-                      <div className="matching-evidence">
-                        <h4>Matching evidence</h4>
-                        {peer.matchingBlocks.length ? (
-                          peer.matchingBlocks.map((b, i) => (
-                            <div className="fields-2" key={i}>
-                              <pre>{b.source}</pre>
-                              <pre>{b.peer}</pre>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="muted">
-                            Comparison based on normalized structure; no long
-                            matching source block.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    </section>
                     <h3>Quality observations</h3>
                     {analysis.quality.map((q, i) => (
                       <div className="quality-item" key={i}>
@@ -737,7 +744,7 @@ export default function Review({
               <section className="review-card review-analysis-card" aria-label="Code analysis">
                 <div className="review-card-topline">
                   <div className="eyebrow"><Code size={15} aria-hidden="true" /> CODE ANALYSIS</div>
-                  <button className="icon-btn review-desktop-close" aria-label="Close review" onClick={onClose}><X size={17} /></button>
+                  <button className="icon-btn review-desktop-close" aria-label="Close review" disabled={busy} onClick={() => requestLeave()}><X size={17} /></button>
                 </div>
                 <div className="review-analysis-scroll">
                   {analysis ? (
@@ -747,7 +754,8 @@ export default function Review({
                           <span className="metric-val">{analysis.total ? `${analysis.met} / ${analysis.total}` : "—"}</span>
                           <span className="metric-label">Requirements</span>
                         </div>
-                        <div
+                        <button
+                          type="button"
                           className={`metric-tile ${
                             highestMatch && highestMatch.percentage >= 70
                               ? "metric-danger"
@@ -756,10 +764,13 @@ export default function Review({
                               : "metric-clean"
                           }`}
                           title={highestMatch ? `Highest peer similarity: ${highestMatch.percentage}%` : "No peer match"}
+                          aria-label={highestMatch ? `View similarity comparison (${highestMatch.percentage}%)` : "No comparable peer submissions"}
+                          disabled={!highestMatch}
+                          onClick={openSimilarity}
                         >
                           <span className="metric-val">{highestMatch ? `${highestMatch.percentage}%` : "Clean"}</span>
                           <span className="metric-label">Similarity</span>
-                        </div>
+                        </button>
                         <div className={`metric-tile ${analysis.quality.length === 0 ? "metric-clean" : "metric-info"}`} title="Automated code quality observations">
                           <span className="metric-val">{analysis.quality.length === 0 ? "0 issues" : `${analysis.quality.length} issue${analysis.quality.length > 1 ? "s" : ""}`}</span>
                           <span className="metric-label">Quality</span>
@@ -799,11 +810,12 @@ export default function Review({
                       )}
 
                       {highestMatch && highestMatch.percentage >= 50 && (
-                        <div className={`review-sidebar-similarity-alert ${highestMatch.percentage >= 70 ? "high" : "moderate"}`}>
+                        <button type="button" onClick={openSimilarity} className={`review-sidebar-similarity-alert ${highestMatch.percentage >= 70 ? "high" : "moderate"}`}>
                           <span>
                             {highestMatch.percentage >= 70 ? "🚨" : "⚠️"} {highestMatch.percentage}% similarity with {highestPeerStudent ? `Roll ${highestPeerStudent.rollNumber}` : "peer"}
                           </span>
-                        </div>
+                          <CaretRight size={14} aria-hidden="true" />
+                        </button>
                       )}
 
                       <button
@@ -832,6 +844,7 @@ export default function Review({
                       <span>Marks</span>
                       <div className="marks-input">
                         <input
+                          data-initial-focus
                           disabled={busy}
                           type="number"
                           min="0"
@@ -871,14 +884,14 @@ export default function Review({
                     <span className="review-remaining-count">
                       {remainingCount === 0 ? (
                         <span className="review-status-success">
-                          🎉 All submissions graded
+                          All submissions for this task graded
                         </span>
                       ) : queueMode === "pending" ? (
                         <>
                           <span><strong>{remainingCount}</strong> remaining</span>
                           {nextStudent && (
                             <small className="review-next-peek">
-                              Next: Roll {nextStudent.rollNumber}
+                              Next: {advanceTarget?.taskId !== task.id ? `Task ${nextTaskNumber} · ` : ""}Roll {nextStudent.rollNumber}
                             </small>
                           )}
                         </>
@@ -897,8 +910,8 @@ export default function Review({
                       onClick={() => grade(true)}
                       disabled={!canSave}
                       title={
-                        nextSubmission
-                          ? `Save and skip to next remaining student (Roll ${nextStudent?.rollNumber || ""}) [Ctrl+Enter]`
+                        advanceTarget
+                          ? `Save and open ${advanceTarget.taskId !== task.id ? `Task ${nextTaskNumber}, ` : ""}Roll ${nextStudent?.rollNumber || ""} [Ctrl+Enter]`
                           : queueMode === "pending"
                             ? "Save grade for the final remaining student"
                             : "Save grade (last student in this task)"
@@ -907,7 +920,9 @@ export default function Review({
                       <ArrowRight size={17} weight="bold" />
                       {busy ? (
                         "Saving…"
-                      ) : nextSubmission ? (
+                      ) : !nextSubmission && nextTaskSubmission && onNavigate ? (
+                        <>Save & Begin Task {nextTaskNumber}</>
+                      ) : nextSubmission && onNavigate ? (
                         <>
                           Save & Next{" "}
                           {nextStudent ? `(Roll ${nextStudent.rollNumber})` : ""}

@@ -15,11 +15,11 @@ test("concurrent first requests initialize one teacher after a database conflict
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
     const body = JSON.parse(String(options.body));
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-    if (url.endsWith("labtrack_read_if_changed")) {
+    if (url.endsWith("labtrack_read_compact")) {
       if (remote.users.length === 0) initialReads++;
       return json({ revision, data: body.known_revision === revision ? null : remote });
     }
-    assert.ok(url.endsWith("labtrack_write"));
+    assert.ok(url.endsWith("labtrack_write_scoped"));
     writes++;
     if (body.expected_revision !== revision) {
       conflicts++;
@@ -51,8 +51,8 @@ test("concurrent first requests initialize one teacher after a database conflict
 });
 
 test("serverless requests retain sessions, read fresh data, upload and grade without a shared process", async (t) => {
-  const env = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY };
-  Object.assign(process.env, { SUPABASE_URL: "https://test.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_testing" });
+  const env = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY, LABTRACK_READINESS_TOKEN: process.env.LABTRACK_READINESS_TOKEN };
+  Object.assign(process.env, { SUPABASE_URL: "https://test.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_testing", LABTRACK_READINESS_TOKEN: "fixture-monitor-token-32-characters-minimum" });
   t.after(() => {
     for (const [key, value] of Object.entries(env)) {
       if (value === undefined) delete process.env[key];
@@ -68,9 +68,10 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
   ];
   const budgets = new Map<string, number>();
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    if (url.includes("/labtrack_meta?")) return Response.json([{ revision }]);
     const body = JSON.parse(String(options.body));
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-    if (url.endsWith("labtrack_read_if_changed"))
+    if (url.endsWith("labtrack_read_compact"))
       return json({ revision, data: body.known_revision === revision ? null : remote });
     if (url.endsWith("labtrack_login_attempt")) {
       if (body.clear_attempts) { budgets.delete(body.attempt_key); return json(true); }
@@ -101,6 +102,7 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
     return response.headers["set-cookie"][0].split(";")[0];
   };
   const teacher = await login("qa@example.test");
+  await request(handler).get("/api/ready").set("Cookie", teacher).expect(200);
   const student = await login("1");
   const lab = await request(handler).post("/api/labs").set("Cookie", teacher).send({
     title: "Serverless lab", description: "Test", published: true,
@@ -142,4 +144,36 @@ test("health checks, anonymous state and unsigned protected requests do not quer
   await request(handler).post("/api/auth/demo").send({ role: "teacher" }).expect(403);
   await request(handler).get("/api/reports.csv").expect(401);
   assert.equal(reads, 0);
+});
+
+test("serverless readiness requires a private monitor token, probes only metadata and sanitizes failures", async (t) => {
+  const previous = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY, LABTRACK_READINESS_TOKEN: process.env.LABTRACK_READINESS_TOKEN };
+  const token = "isolated-monitor-token-32-characters-minimum";
+  Object.assign(process.env, { SUPABASE_URL: "https://ready-test.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_testing", LABTRACK_READINESS_TOKEN: token });
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  let probes = 0, unavailable = false;
+  const logs: string[] = [];
+  t.mock.method(console, "error", (line: string) => logs.push(line));
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    assert.match(url, /\/labtrack_meta\?select=revision/);
+    probes++;
+    if (unavailable) throw new Error("private-provider-details");
+    return Response.json([{ revision: 1 }]);
+  });
+  await request(handler).get("/api/ready").expect(401);
+  await request(handler).get("/api/ready").set("X-Readiness-Token", "wrong").expect(401);
+  assert.equal(probes, 0);
+  await request(handler).get("/api/ready").set("X-Readiness-Token", token).expect(200);
+  unavailable = true;
+  const failed = await request(handler).get("/api/ready").set("X-Readiness-Token", token).expect(503);
+  assert.equal(failed.body.requestId, failed.headers["x-request-id"]);
+  assert.ok(failed.body.requestId);
+  assert.doesNotMatch(JSON.stringify(failed.body) + logs.join(""), /private-provider-details|sb_secret_testing|isolated-monitor/);
+  process.env.LABTRACK_READINESS_TOKEN = "too-short";
+  await request(handler).get("/api/ready").set("X-Readiness-Token", "too-short").expect(401);
+  assert.equal(probes, 2);
 });

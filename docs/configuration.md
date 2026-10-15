@@ -16,6 +16,8 @@ Never prefix a Supabase secret with `VITE_`, embed it in React, commit private e
 | `MONGODB_URI` | Absent; MongoDB adapter | MongoDB, with transactions/replica set |
 | `SUPABASE_URL` | Absent; HTTPS project origin without path/query/credentials | Supabase and Vercel |
 | `SUPABASE_SECRET_KEY` | Absent; server `sb_secret_...`, or supported legacy service-role JWT | Supabase and Vercel |
+| `LABTRACK_BACKUP_KEY` | Optional base64-encoded 32-byte AES key; otherwise backup CLI retains `.data/backup-key` | Required in GitHub backup secrets; retain separately for recovery |
+| `LABTRACK_READINESS_TOKEN` | Optional private random token, at least 32 characters | Vercel monitor access to `/api/ready` with `X-Readiness-Token`; teacher-session access otherwise |
 | `CLIENT_ORIGIN` | Absent; extra trusted mutation origin | Only if required by a deliberately configured frontend setup |
 | `ADMIN_EMAIL` | None | First startup with empty, non-demo database |
 | `ADMIN_PASSWORD` | None; 12–256 characters | First startup with empty, non-demo database |
@@ -42,7 +44,7 @@ Do not configure MongoDB and Supabase simultaneously. Both Supabase settings mus
 
 Tests and entrypoints may pass `AppOptions` instead of environment values: `dataDir`, `mongoUri`, `supabaseUrl`, `supabaseKey`, `demo`, `production`, `clientOrigin`, `adminEmail`, `adminPassword`, `adminName`, `sessionCookieName`, `serverless`. Most settings use explicit options before environment fallback; inspect `server/app.ts` for each expression rather than assuming every blank string behaves the same.
 
-`serverless=true` enables trust-proxy mode, streamed JSON, Supabase revision cache, database login limiting and eight write attempts. It is used with Supabase by `api/index.ts`. The analysis demo explicitly disables both hosted adapters and selects `labtrack_analysis_demo` as its cookie name.
+`serverless=true` enables trust-proxy mode, streamed JSON, database login limiting and at most eight write attempts in 45 seconds. Both persistent and serverless Supabase use a bounded private metadata cache and revision checks before protected requests. It is used with Supabase by `api/index.ts`. The analysis demo explicitly disables both hosted adapters and selects `labtrack_analysis_demo` as its cookie name.
 
 ## Tooling settings
 

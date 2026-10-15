@@ -10,7 +10,10 @@ import {
 import type { AppState, Submission, TaskAnalysis } from "../shared/types";
 import { byRollNumber } from "../shared/roster";
 import { api } from "./api";
+import { firstPendingSubmission } from "./review-queue";
 import TaskComparison from "./TaskComparison";
+import { evidenceVersion } from "../shared/evidence";
+import { allowNavigation } from "./navigation-guard";
 
 export default function CheckTasks({ state, onReview, onRefresh }: { state: AppState; onReview: (submission: Submission) => void; onRefresh: () => Promise<unknown> }) {
   const [labId, setLabId] = useState(state.labs[0]?.id || "");
@@ -28,13 +31,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
   const [reload, setReload] = useState(0);
   const [comparison, setComparison] = useState<[string, string] | null>(null);
   const submissions = state.submissions.filter((item) => item.labId === lab?.id && item.taskId === task?.id);
-  const fingerprint = JSON.stringify([
-    lab?.id,
-    task?.id,
-    task?.description,
-    task?.requirements,
-    submissions.map((item) => `${item.id}:${item.revision}`).sort(),
-  ]);
+  const fingerprint = task ? evidenceVersion(task, submissions) : "";
   const result = analysisResult?.fingerprint === fingerprint ? analysisResult.value : null;
   useEffect(() => {
     setComparison(null);
@@ -45,7 +42,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
     const controller = new AbortController();
     setLoading(true); setError(""); setAnalysisResult(null);
     api<TaskAnalysis>(`/labs/${encodeURIComponent(lab.id)}/analysis?taskId=${encodeURIComponent(task.id)}`, { signal: controller.signal })
-      .then((value) => { if (active) setAnalysisResult({ fingerprint, value }); })
+      .then((value) => { if (value.evidenceVersion !== fingerprint) throw new Error("The task evidence changed. Refresh the workspace."); if (active) setAnalysisResult({ fingerprint, value }); })
       .catch((cause) => { if (active) setError(cause.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
@@ -106,18 +103,27 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
   const totalSubmitted = submissions.length;
   const gradedCount = submissions.filter((item) => !!item.grade).length;
   const pendingCount = submissions.filter((item) => !item.grade).length;
+  const nextUngraded = firstPendingSubmission(state.students, submissions);
   const missingCount = Math.max(0, totalStudents - totalSubmitted);
   const gradedPct = totalStudents > 0 ? Math.round((gradedCount / totalStudents) * 100) : 0;
   const pendingPct = totalStudents > 0 ? Math.round((pendingCount / totalStudents) * 100) : 0;
 
   return <div className="task-check-page">
     <div className="task-check-toolbar">
-      <label>Lab<select aria-label="Check tasks lab" value={lab.id} onChange={(event) => { const selected = state.labs.find((item) => item.id === event.target.value)!; setLabId(selected.id); setTaskId(selected.tasks[0]?.id || ""); }}>
+      <label>Lab<select aria-label="Check tasks lab" value={lab.id} onChange={(event) => { if (!allowNavigation()) return; const selected = state.labs.find((item) => item.id === event.target.value)!; setLabId(selected.id); setTaskId(selected.tasks[0]?.id || ""); }}>
         {state.labs.map((item, index) => <option key={item.id} value={item.id}>Lab {index + 1} · {item.title}</option>)}
       </select></label>
-      <label>Task<select aria-label="Check tasks task" value={task.id} onChange={(event) => setTaskId(event.target.value)}>{lab.tasks.map((item, index) => <option key={item.id} value={item.id}>Task {index + 1} · {item.title}</option>)}</select></label>
       <label>Flag matches<select aria-label="Similarity threshold" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))}><option value={70}>Over 70%</option><option value={50}>Over 50%</option></select></label>
-      <button className="task-check-refresh" aria-label="Refresh task submissions" disabled={loading || refreshing} onClick={async () => { setError(""); setRefreshing(true); try { await onRefresh(); setReload((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh submissions."); } finally { setRefreshing(false); } }}><ArrowsClockwise size={18} /> {refreshing ? "Refreshing…" : "Refresh"}</button>
+      <button className="task-check-refresh" aria-label="Refresh task submissions" disabled={loading || refreshing} onClick={async () => { if (!allowNavigation()) return; setError(""); setRefreshing(true); try { await onRefresh(); setReload((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh submissions."); } finally { setRefreshing(false); } }}><ArrowsClockwise size={18} /> {refreshing ? "Refreshing…" : "Refresh"}</button>
+    </div>
+    <div className="task-check-task-switcher" role="group" aria-label="Check tasks task">
+      {lab.tasks.map((item, index) => {
+        const pending = state.submissions.filter((work) => work.labId === lab.id && work.taskId === item.id && !work.grade).length;
+        return <button key={item.id} type="button" aria-pressed={item.id === task.id}
+          title={item.title} onClick={() => { if (allowNavigation()) setTaskId(item.id); }}>
+          <span>Task {index + 1}</span><small>{pending} pending</small>
+        </button>;
+      })}
     </div>
     {error && <p className="error" role="alert">{error}</p>}
     {loading && <p className="task-check-note" role="status">Checking submissions…</p>}
@@ -155,6 +161,16 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
                 🎉 All {totalStudents} graded!
               </span>
             )}
+            <button
+              type="button"
+              className="teacher-primary-button task-check-start"
+              disabled={!nextUngraded || refreshing}
+              title={nextUngraded ? `Open the next ungraded submission for Task ${lab.tasks.indexOf(task) + 1}` : "No submitted work is awaiting a grade for this task."}
+              onClick={() => { if (nextUngraded) onReview(nextUngraded); }}
+            >
+              {nextUngraded ? "Review next ungraded" : "No ungraded submissions"}
+              <ArrowRight size={16} weight="bold" />
+            </button>
           </div>
           <div
             className="task-progress-bar-track"

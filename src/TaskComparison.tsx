@@ -4,6 +4,9 @@ import type { AnalysisResult, AppState, Submission, Task, TaskAnalysis } from ".
 import { api } from "./api";
 import { buildPreview, resolvePath } from "./preview";
 import { useSubmissionAssets } from "./submission-assets";
+import { evidenceVersion } from "../shared/evidence";
+import { allowNavigation } from "./navigation-guard";
+import { useSubmissionSource } from "./submission-source";
 
 interface Props {
   left: Submission; right: Submission; task: Task; state: AppState;
@@ -16,20 +19,39 @@ export default function TaskComparison({ left, right, task, state, pair, onBack,
   const [evidence, setEvidence] = useState<{ fingerprint: string; blocks: { source: string; peer: string }[] } | null>(null);
   const [evidenceError, setEvidenceError] = useState("");
   const [gradingWarning, setGradingWarning] = useState("");
-  const evidenceFingerprint = JSON.stringify([left.id, left.revision, right.id, right.revision, task.description, task.requirements]);
+  const drafts = useRef(new Map<string, { dirty: boolean; saving: boolean }>());
+  function trackDraft(id: string, status?: { dirty: boolean; saving: boolean }) {
+    if (status) drafts.current.set(id, status); else drafts.current.delete(id);
+  }
+  useEffect(() => {
+    const leave = (event: Event) => {
+      const values = [...drafts.current.values()];
+      if (values.some(value => value.saving) ||
+          (values.some(value => value.dirty) && !window.confirm("Discard unsaved comparison marks and feedback?"))) event.preventDefault();
+    };
+    const unload = (event: BeforeUnloadEvent) => {
+      if ([...drafts.current.values()].some(value => value.dirty || value.saving)) {
+        event.preventDefault(); event.returnValue = "";
+      }
+    };
+    window.addEventListener("labtrack:before-navigate", leave);
+    window.addEventListener("beforeunload", unload);
+    return () => { window.removeEventListener("labtrack:before-navigate", leave); window.removeEventListener("beforeunload", unload); };
+  }, []);
+  const evidenceFingerprint = evidenceVersion(task, [left, right]);
   const blocks = evidence?.fingerprint === evidenceFingerprint ? evidence.blocks : [];
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
     setEvidence(null); setEvidenceError("");
-    api<AnalysisResult>(`/submissions/${left.id}/analysis?peerId=${encodeURIComponent(right.id)}`, { signal: controller.signal })
-      .then((analysis) => { if (active) setEvidence({ fingerprint: evidenceFingerprint, blocks: analysis.similarities.find((match) => match.submissionId === right.id)?.matchingBlocks || [] }); })
+    api<AnalysisResult>(`/submissions/${left.id}/analysis?revision=${left.revision}&peerId=${encodeURIComponent(right.id)}`, { signal: controller.signal })
+      .then((analysis) => { if (analysis.evidenceVersion !== evidenceFingerprint) throw new Error("The compared projects changed. Refresh the workspace."); if (active) setEvidence({ fingerprint: evidenceFingerprint, blocks: analysis.similarities.find((match) => match.submissionId === right.id)?.matchingBlocks || [] }); })
       .catch((cause) => { if (active) setEvidenceError(cause.message); });
     return () => { active = false; controller.abort(); };
   }, [evidenceFingerprint]);
   return <section className="task-comparison" aria-label="Side by side task comparison">
     <div className="task-comparison-heading">
-      <button className="teacher-text-button" onClick={onBack}><ArrowLeft size={16} /> Back to tasks</button>
+      <button className="teacher-text-button" onClick={() => { if (allowNavigation()) onBack(); }}><ArrowLeft size={16} /> Back to tasks</button>
       <strong>{task.title}</strong>
       <span>{pair ? pair.comparable ? `${pair.percentage}% matching code` : "Incomplete comparison" : loading ? "Comparison updating…" : available ? "No substantial match" : "Comparison unavailable"}</span>
     </div>
@@ -42,12 +64,13 @@ export default function TaskComparison({ left, right, task, state, pair, onBack,
     {gradingWarning && <p className="error" role="alert">{gradingWarning}</p>}
     {view === "source" && <p className="task-check-note">Highlighted lines show sample matching blocks; the score covers both tasks.</p>}
     <div className="task-comparison-grid">
-      {[left, right].map((submission, index) => <ComparisonPane key={`${submission.id}-${submission.revision}`} submission={submission} task={task} state={state} onRefresh={onRefresh} view={view} matches={blocks.map((block) => index === 0 ? block.source : block.peer)} onStale={() => setGradingWarning("The submission changed while you were grading. Review the latest revision before saving marks again.")} onGradeSaved={() => setGradingWarning("")} />)}
+      {[left, right].map((submission, index) => <ComparisonPane key={`${submission.id}-${submission.revision}`} submission={submission} task={task} state={state} onRefresh={onRefresh} view={view} trackDraft={trackDraft} matches={blocks.map((block) => index === 0 ? block.source : block.peer)} onStale={() => setGradingWarning("The submission changed while you were grading. Review the latest revision before saving marks again.")} onGradeSaved={() => setGradingWarning("")} />)}
     </div>
   </section>;
 }
 
-function ComparisonPane({ submission, task, state, onRefresh, view, matches, onStale, onGradeSaved }: { submission: Submission; task: Task; state: AppState; onRefresh: () => Promise<unknown>; view: string; matches: string[]; onStale: () => void; onGradeSaved: () => void }) {
+function ComparisonPane({ submission: summary, task, state, onRefresh, view, matches, onStale, onGradeSaved, trackDraft }: { submission: Submission; task: Task; state: AppState; onRefresh: () => Promise<unknown>; view: string; matches: string[]; onStale: () => void; onGradeSaved: () => void; trackDraft: (id: string, status?: { dirty: boolean; saving: boolean }) => void }) {
+  const { project: submission, loading: sourceLoading, error: sourceError } = useSubmissionSource(summary);
   const student = state.students.find((user) => user.id === submission.studentId);
   const [entry, setEntry] = useState(submission.files.find((file) => /\.html?$/i.test(file.path))?.path || "");
   const [file, setFile] = useState(submission.files[0]?.path || "");
@@ -55,6 +78,12 @@ function ComparisonPane({ submission, task, state, onRefresh, view, matches, onS
   const [feedback, setFeedback] = useState(submission.grade?.feedback || "");
   const [publish, setPublish] = useState(submission.grade?.published ?? true);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(() => JSON.stringify([marks, feedback, publish]));
+  const dirty = JSON.stringify([marks, feedback, publish]) !== saved;
+  useEffect(() => {
+    trackDraft(submission.id, { dirty, saving });
+    return () => trackDraft(submission.id);
+  }, [submission.id, dirty, saving, trackDraft]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const frame = useRef<HTMLIFrameElement>(null);
@@ -72,8 +101,9 @@ function ComparisonPane({ submission, task, state, onRefresh, view, matches, onS
   async function save(event: React.FormEvent) {
     event.preventDefault(); setError(""); setNotice(""); setSaving(true);
     try {
-      await api(`/submissions/${submission.id}/grade`, { method: "PATCH", body: JSON.stringify({ marks: Number(marks), feedback, published: publish, revision: submission.revision }) });
+      await api(`/submissions/${submission.id}/grade`, { method: "PATCH", body: JSON.stringify({ marks: Number(marks), feedback, published: publish, revision: submission.revision, expectedGradeAt: submission.grade?.gradedAt || "" }) });
       onGradeSaved();
+      setSaved(JSON.stringify([marks, feedback, publish]));
       setNotice(publish ? "Grade published." : "Draft grade saved.");
       try { await onRefresh(); }
       catch (cause) { setError(`The grade was saved, but the workspace could not refresh. ${cause instanceof Error ? cause.message : "Refresh before grading again."}`); }
@@ -109,9 +139,11 @@ function ComparisonPane({ submission, task, state, onRefresh, view, matches, onS
       const highlighted = ranges.some((range) => range.start < offset && range.end > start);
       return <span key={index} className="comparison-source-line">{highlighted ? <mark>{line || " "}</mark> : line || " "}{"\n"}</span>;
     })}</code></pre>}
+    {sourceLoading && <p role="status">Loading this revision's source…</p>}
+    {sourceError && <p className="error" role="alert">{sourceError}</p>}
     {assetError && <p className="error" role="alert">{assetError}</p>}
     <form className="comparison-grade" onSubmit={save}>
-      <fieldset disabled={saving}>
+      <fieldset disabled={saving || sourceLoading || !!sourceError}>
         <label className="field">Marks / {task.maxMarks}<input aria-label={`${label} marks`} type="number" required min={0} max={task.maxMarks} step="any" value={marks} onChange={(event) => setMarks(event.target.value)} /></label>
         <label className="field">Feedback<textarea aria-label={`${label} feedback`} maxLength={4000} rows={2} value={feedback} onChange={(event) => setFeedback(event.target.value)} /></label>
         <label className="comparison-publish"><input aria-label={`${label} publish grade`} type="checkbox" checked={publish} onChange={(event) => setPublish(event.target.checked)} /> Publish grade</label>

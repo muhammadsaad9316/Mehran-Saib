@@ -23,6 +23,7 @@ import type { AppState, Lab, Submission, User } from "../shared/types";
 import { byRollNumber } from "../shared/roster";
 import CheckTasks from "./CheckTasks";
 import BrandLogo from "./BrandLogo";
+import { allowNavigation } from "./navigation-guard";
 
 interface Props {
   state: AppState;
@@ -103,6 +104,7 @@ export default function TeacherPortal({
     };
   };
   function navigate(next: Page) {
+    if (!allowNavigation()) return;
     setPage(next);
     setFilter("all");
     setQuery("");
@@ -112,6 +114,7 @@ export default function TeacherPortal({
     navigate("labs");
   }
   function openLabStudents(lab: Lab, selectedFilter = "all") {
+    if (!allowNavigation()) return;
     setSelectedLab(lab.id);
     setFilter(selectedFilter);
     setQuery("");
@@ -220,7 +223,7 @@ export default function TeacherPortal({
           </div>
         </header>
         <main
-          className="teacher-main"
+          className={`teacher-main${page === "checks" ? " teacher-main-checks" : ""}`}
           id="teacher-content"
           tabIndex={-1}
           key={page}
@@ -235,7 +238,7 @@ export default function TeacherPortal({
                     ? "Lab library"
                     : page === "checks" ? "Check tasks" : "Class register"}
               </h1>
-              <p>{page === "dashboard" ? "Your labs, your class, and a clear view of what’s next." : page === "labs" ? "Prepare assignments, publish tasks, and keep everything in one place." : page === "checks" ? "Review requirements and compare submitted work before assigning marks." : "Every student, every task, and every mark in one register."}</p>
+              {page !== "checks" && <p>{page === "dashboard" ? "Your labs, your class, and a clear view of what’s next." : page === "labs" ? "Prepare assignments, publish tasks, and keep everything in one place." : "Every student, every task, and every mark in one register."}</p>}
             </div>
             <div className="teacher-title-aside">
               <span className="teacher-course-meta">
@@ -678,7 +681,7 @@ export default function TeacherPortal({
                         </a>
                         <a
                           className="teacher-text-button"
-                          href={`/api/reports/print?labId=${encodeURIComponent(lab.id)}`}
+                          href={`/api/reports/print?select=1&labId=${encodeURIComponent(lab.id)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -772,7 +775,7 @@ export default function TeacherPortal({
                       <DownloadSimple size={16} weight="light" /> CSV
                     </a>
                     <a
-                      href={`/api/reports/print?labId=${encodeURIComponent(currentLab.id)}`}
+                      href={`/api/reports/print?select=1&labId=${encodeURIComponent(currentLab.id)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

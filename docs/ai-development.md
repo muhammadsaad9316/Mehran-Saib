@@ -12,13 +12,13 @@ Contracts: shared/types.ts; private Database types in server/store.ts.
 Auth: app-owned users, scrypt hashes, opaque HttpOnly session cookie.
 Persistence: server-only Supabase REST RPCs; local JSON/MongoDB alternatives.
 Production: documented Vercel site, API entry api/index.ts and vercel.mjs.
-Supabase: JSONB collections + global revision; no browser DB/Auth client.
+Supabase: compact JSONB metadata + private payloads; global revision/scoped guards; no browser DB/Auth client.
 Writes: Store.mutate, atomic diff, replay validation on bounded conflicts.
 Grading: explicit teacher action; draft privacy; current submission revision.
 Uploads: static source/raster projects; private bytes; opaque iframe preview.
 Analysis: parser checks/similarity evidence only, no AI detection or marks.
 Limits: rolls 1–41; no multi-class tenancy, password reset or old revisions.
-Checks: npm test and npm run build; isolated data for mutation smoke tests.
+Checks: npm test, npm run build, npm run test:browser; isolated data for all mutations.
 ```
 
 ## Read by task
@@ -49,7 +49,7 @@ Search every caller before changing shared types/helpers. Backend `.js` import s
 - Grading from parser/similarity percentages, adding AI detection or treating matching excerpts as a verdict.
 - Running uploaded code on the server or adding `allow-same-origin` to its preview.
 - Assuming `prepare:class` is read-only or `provision:class` supports arbitrary projects. Read the actual side effects and hard-coded target check.
-- Treating the retained Render template as the active deployment, or the initial `001` migration name as the hosted identifier.
+- Treating the retained Render template as the active deployment, or replaying the reconciled initial migration against the existing database.
 - Treating demo or historical audit data as the current live class state.
 
 ## Safe change workflow

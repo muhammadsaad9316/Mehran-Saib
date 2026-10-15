@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Submission } from "../shared/types";
+import { api } from "./api";
 
 export function useSubmissionAssets(submission: Submission) {
   const [assets, setAssets] = useState<Record<string, string>>({});
@@ -8,22 +9,25 @@ export function useSubmissionAssets(submission: Submission) {
     let active = true;
     const controller = new AbortController();
     setAssets({}); setAssetError("");
-    Promise.allSettled((submission.assets || []).map(async (asset) => {
-      const response = await fetch(`/api/submissions/${submission.id}/files/${asset.path.split("/").map(encodeURIComponent).join("/")}`, { signal: controller.signal });
-      if (!response.ok) throw new Error(`Could not load ${asset.path}`);
-      const blob = await response.blob();
+    const queue = [...(submission.assets || [])];
+    const worker = async () => {
+    while (queue.length && !controller.signal.aborted) {
+      const asset = queue.shift()!;
+      try {
+      const blob = await api<Blob>(`/submissions/${submission.id}/files/${asset.path.split("/").map(encodeURIComponent).join("/")}?revision=${submission.revision}`, { signal: controller.signal, responseType: "blob" });
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
         reader.onerror = () => reject(new Error(`Could not read ${asset.path}`));
         reader.readAsDataURL(blob);
       });
-      return [asset.path, content] as const;
-    })).then((results) => {
-      if (!active) return;
-      setAssets(Object.fromEntries(results.flatMap((result) => result.status === "fulfilled" ? [result.value] : [])));
-      if (results.some((result) => result.status === "rejected")) setAssetError("Some image assets could not be loaded. Retry by reopening this task.");
-    });
+      if (active) setAssets(previous => ({ ...previous, [asset.path]: content }));
+      } catch (cause) {
+        if (active) setAssetError(cause instanceof Error ? cause.message : "Some image assets could not be loaded. Reopen this task to retry.");
+      }
+    }
+    };
+    void Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
     return () => { active = false; controller.abort(); };
   }, [submission.id, submission.revision]);
   return { assets, assetError };

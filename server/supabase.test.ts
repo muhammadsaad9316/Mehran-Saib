@@ -235,3 +235,86 @@ test("Supabase stale writes reload the latest state and return a refreshable con
   assert.equal(reads, 2);
   await store.close();
 });
+
+test("a committed write with a lost response is reconciled without replay and refreshes persistent state", async (t) => {
+  const remote = emptyDatabase();
+  let revision = 0;
+  let writes = 0;
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    if (url.endsWith("labtrack_read")) return json({ revision, data: structuredClone(remote) });
+    writes++;
+    const body = JSON.parse(String(options.body));
+    remote.sessions = body.upserts.find((item: { collection: string }) => item.collection === "sessions") ? [body.upserts[0].document] : [];
+    revision++;
+    throw new TypeError("private transport detail", { cause: { code: "ECONNRESET" } });
+  });
+  const store = new Store("unused", undefined, config);
+  await store.open();
+  const saved = await store.mutate(data => {
+    data.sessions.push({ id: "saved-once", userId: "u1", expiresAt: 100 });
+    return "acknowledged";
+  });
+  assert.equal(saved, "acknowledged");
+  assert.equal(writes, 1);
+  assert.deepEqual(store.data, remote);
+  await store.close();
+});
+
+test("41 delayed independent classroom writes complete within the bounded retry policy", async (t) => {
+  const remote = emptyDatabase();
+  let revision = 0;
+  let randomSeed = 12345;
+  t.mock.method(Math, "random", () => ((randomSeed = (1664525 * randomSeed + 1013904223) >>> 0) / 4294967296));
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const body = JSON.parse(String(options.body));
+    if (url.endsWith("labtrack_read_compact")) return json({ revision, data: body.known_revision === revision ? null : structuredClone(remote) });
+    if (body.expected_revision !== revision && body.expected_documents.some((expected: { collection: keyof typeof remote; id: string; document: unknown }) => {
+      const current = remote[expected.collection].find(item => item.id === expected.id) || null;
+      return JSON.stringify(current) !== JSON.stringify(expected.document);
+    })) return json({ code: "PT409" }, 409);
+    for (const item of body.upserts) {
+      const rows = remote[item.collection as keyof typeof remote] as { id: string }[];
+      const index = rows.findIndex(row => row.id === item.id);
+      if (index < 0) rows.push(item.document); else rows[index] = item.document;
+    }
+    return json(++revision);
+  });
+  const stores = Array.from({ length: 41 }, () => new Store("unused", undefined, { ...config, url: "https://class-burst-test.supabase.co", cache: true, compact: true }, 8));
+  await Promise.all(stores.map(store => store.open()));
+  await Promise.all(stores.map((store, index) => store.mutate(data => data.sessions.push({ id: `session-${index}`, userId: `student-${index}`, expiresAt: 100 }))));
+  assert.equal(remote.sessions.length, 41);
+  assert.equal(new Set(remote.sessions.map(session => session.id)).size, 41);
+  assert.equal(revision, 41);
+  await Promise.all(stores.map(store => store.close()));
+});
+
+test("a confirmed compact write stays acknowledged when refresh fails and blocks stale reads until recovery", async (t) => {
+  const remote = emptyDatabase();
+  let revision = 0, writes = 0, unavailable = false;
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    if (url.endsWith("labtrack_read_compact")) {
+      if (unavailable) return json({}, 503);
+      return json({ revision, data: structuredClone(remote) });
+    }
+    const body = JSON.parse(String(options.body));
+    remote.sessions = [body.upserts[0].document];
+    writes++;
+    unavailable = true;
+    return json(++revision);
+  });
+  const store = new Store("unused", undefined, { ...config, compact: true });
+  await store.open();
+  assert.equal(await store.mutate(data => {
+    data.sessions.push({ id: "confirmed", userId: "u1", expiresAt: 100 });
+    return "saved";
+  }), "saved");
+  assert.equal(writes, 1);
+  await assert.rejects(store.ensureFresh(), /Supabase/);
+  unavailable = false;
+  remote.sessions.push({ id: "another-client", userId: "u2", expiresAt: 100 });
+  await store.ensureFresh();
+  assert.deepEqual(store.data, remote);
+  assert.equal(writes, 1);
+  await store.close();
+});

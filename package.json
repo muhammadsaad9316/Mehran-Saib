@@ -9,6 +9,10 @@
     "start": "tsx server/index.ts",
     "demo:analysis": "tsx server/analysis-demo.ts",
     "test": "tsx --test server/*.test.ts src/*.test.ts",
+    "test:browser": "playwright test",
+    "backup": "tsx server/backup.ts backup",
+    "backup:verify": "tsx server/backup.ts verify",
+    "backup:restore": "tsx server/backup.ts restore",
     "prepare:class": "tsx server/class-setup.ts --prepare",
     "provision:class": "tsx server/class-setup.ts"
   },
@@ -34,6 +38,8 @@
     "tsx": "^4.23.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
+    "@playwright/test": "^1.64.1",
     "@types/adm-zip": "^0.5.7",
     "@types/cookie-parser": "^1.4.9",
     "@types/css-tree": "^2.3.10",

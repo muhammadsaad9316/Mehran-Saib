@@ -36,7 +36,7 @@ There is no Supabase Auth, self-registration, email verification, password-reset
 
 `publicUser` removes `passwordHash`. `publicSubmission` removes `binaryAssets`; for students it removes unpublished grades and reports the status as submitted. `/state` also restricts students to their own work and published labs; only teachers receive activity.
 
-Source file text and instruction-file base64 are intentionally present in authorized state. Binary images are private in storage and downloaded through the ownership-checked file route. Do not return `store.data` directly from a new endpoint.
+State includes source paths with empty content and `sourceOmitted=true`, plus authorized instruction-file base64. Selected source and binary images load through ownership-checked, revision-matched endpoints. Do not return `store.data` directly from a new endpoint.
 
 ## Mutation discipline
 
@@ -44,17 +44,17 @@ Source file text and instruction-file base64 are intentionally present in author
 
 | Adapter | Reads | Writes / limits |
 | --- | --- | --- |
-| Supabase | RPC snapshot; conditional revision reads/cache in serverless mode | Changed documents/deletions in one versioned transaction |
+| Supabase | Private metadata snapshot; conditional revision reads/cache before protected requests | Changed documents/deletions in one versioned transaction |
 | JSON | Private `labtrack.json` at startup | Temporary file then atomic rename; one process |
 | MongoDB | Five collections at startup, `_id` mapped to application `id` | Changed/deleted records in a session transaction; Atlas/replica set needed; one process |
 
 Only one hosted provider may be configured. No adapter performs automatic local-demo-to-hosted migration.
 
-Supabase persistent stores use one write attempt. A stale global revision reloads the store and returns 409. Vercel stores use at most eight attempts: reload, clone and rerun validation with a short jittered wait. Make mutation callbacks replay-safe: no network calls, file writes, email, payments or other external side effects inside them. Generate needed hashes or immutable input outside the callback, and recheck mutable database constraints inside it.
+Supabase persistent stores use one write attempt. Scoped SQL permits unrelated writes; relevant stale records cause a reload and 409. Vercel stores use at most eight attempts: reload, clone and rerun validation with increasing jitter inside a shared 45-second budget. Make mutation callbacks replay-safe: no network calls, file writes, email, payments or other external side effects inside them. Generate needed hashes or immutable input outside the callback, and recheck mutable database constraints inside it.
 
 Lab PATCH checks that the old lab still matches before replacing it. Uploads recheck publication/task existence and current submission inside the mutation. Grades recheck submission revision and current task maximum. Preserve those checks when refactoring. `SupabaseStorageLimitError` becomes HTTP 507; it is not retried.
 
-The conditional cache is private and keyed by project plus a hash of its credential. It stores one snapshot up to 16 MiB and clones for each caller. It is a transfer optimization, not an alternative to the database revision check. Local/persistent snapshots require restart after out-of-process edits; local/MongoDB are not suitable for multiple independent writers.
+The conditional cache is private and keyed by project plus a hash of its credential. It stores one snapshot up to 16 MiB and clones for each caller. It is a transfer optimization, not an alternative to the database revision check. Persistent Supabase checks revisions before protected requests/login. JSON/MongoDB snapshots require restart after out-of-process edits and are not suitable for multiple independent writers.
 
 ## Domain rules
 

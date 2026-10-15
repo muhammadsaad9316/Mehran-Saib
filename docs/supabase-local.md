@@ -32,6 +32,8 @@ Sign in manually as the existing teacher or a student using roll number/email. T
 
 Saving `.env` restarts Node automatically. If the URL is present and the key is missing, a development-only HTTP 503 explains the missing setting. Save the correct key then use Try again. Empty proxy gateway errors briefly retry reads during restarts; writes and JSON API errors are not replayed.
 
+Persistent startup retries its initial Supabase read up to three times for connection/timeout failures or HTTP 502/503/504, within one 45-second deadline. Each request still has a 15-second timeout; retries wait roughly 0.5 then 1 second, plus up to 0.25 seconds of jitter. Terminal warnings show only a safe error category. The API starts when that read succeeds, without requiring a file edit. If the attempts/deadline are exhausted, restore connectivity and restart `npm run dev` (or the persistent API); the browser's Try again button cannot restart a failed process. Invalid configuration, denied credentials, missing migrations and malformed data fail immediately. These retries do not apply to writes, conflict reloads or Vercel requests.
+
 The persistent Node API holds a working snapshot. Restart after manual/external database changes; its Supabase mode does not refresh before every request. Changes are atomic and revision-checked. A conflict reloads and returns 409; refresh the UI and review before saving again.
 
 Demo `.data/labtrack.json` is separate and never copied into Supabase. It is retained on disk if it already exists. Do not enable demo mode against the real project. Uploads and attachments consume database space; [analysis](analysis.md) documents limits and preview behavior.

@@ -4,6 +4,7 @@ dist/
 data/
 .production-smoke/
 artifacts/
+*.enc.json
 .env
 .env.*
 *.log

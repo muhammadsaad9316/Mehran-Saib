@@ -33,9 +33,9 @@ This is a React/TypeScript/Vite SPA with an Express API and private Supabase per
 
 `npm run dev` runs Vite on 5173 and Node on 3001. The dev proxy hard-codes API port 3001. `server/index.ts` loads root `.env`; the API does not load `.env.local`. `npm start` serves the existing `dist/`; build first.
 
-Persistent servers use one working snapshot. Vercel requires Supabase, checks revisions per request, has a private bounded cache and retries mutations at most eight times. Persistent Supabase conflicts reload and return 409 after one attempt. Backend `.js` import suffixes in TypeScript ESM are intentional.
+Persistent Supabase servers refresh revisions before protected requests; JSON/MongoDB use one working snapshot. Vercel requires Supabase, checks revisions per request, has a private bounded metadata cache and retries mutations at most eight times within 45 seconds. Scoped SQL checks allow independent writes. Persistent conflicts reload and return 409 after one attempt. Backend `.js` import suffixes in TypeScript ESM are intentional.
 
-The local `001_labtrack.sql` corresponds to hosted `20261012094828_labtrack_private_persistence`; inspect history before applying migrations. Use a new migration for new schema behavior. Never reset the classroom to resolve migration history.
+The initial filename is reconciled as `20261012094828_labtrack_private_persistence.sql`; inspect hosted history before applying migrations. `20261015122901_reliability_payloads.sql` separates private project bytes and retains legacy RPCs. Use a new migration for new schema behavior. Never reset the classroom to resolve migration history.
 
 ## Data and tooling
 
@@ -43,7 +43,7 @@ Preserve user changes; inspect Git status before editing. Keep changes within th
 
 Do not read/print private `.env`, credential sheets, backup contents, cookies or classroom records unless needed for the user's authorized task. Keep them out of code, chat logs and deployment archives. Test mutations on isolated data. `prepare:class` writes credentials and `.env`; `provision:class` targets the fixed live project and is not a verification command.
 
-Use the installed lockfile/dependencies. There is no lint or browser E2E script. Do not add speculative abstractions, unrelated dependencies or absent features without task need.
+Use the installed lockfile/dependencies. There is no lint script. `npm run test:browser` uses isolated fake data; never target real records. Backup commands produce private files; never commit snapshots or keys. Do not add speculative abstractions, unrelated dependencies or absent features without task need.
 
 ## Verification and reporting
 

@@ -26,6 +26,7 @@ export interface Task {
 
 export interface Lab {
   id: string;
+  revision?: number;
   title: string;
   description: string;
   /** ISO date-time, or an empty string when no deadline is set. */
@@ -42,6 +43,7 @@ export interface Submission {
   labId: string;
   taskId: string;
   files: { path: string; content: string }[];
+  sourceOmitted?: boolean;
   assets?: { path: string; mimeType: string }[];
   link: string | null;
   submittedAt: string;
@@ -73,6 +75,7 @@ export interface AppState {
 }
 
 export interface AnalysisResult {
+  evidenceVersion?: string;
   requirements: {
     id: string;
     label: string;
@@ -95,6 +98,7 @@ export interface AnalysisResult {
 }
 
 export interface TaskAnalysis {
+  evidenceVersion?: string;
   taskId: string;
   submissions: { submissionId: string; revision: number; met: number; total: number; qualityCount: number; comparable: boolean }[];
   pairs: { leftId: string; rightId: string; percentage: number; sourceCoverage: number; peerCoverage: number; comparable: boolean }[];

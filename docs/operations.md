@@ -15,7 +15,7 @@ Use isolated data for development checks. Real classroom credentials, uploaded w
 | `npm run prepare:class` | Prepare private credentials and update `.env`; see side effects in onboarding |
 | `npm run provision:class` | Provision the fixed hosted classroom; not a test command |
 
-There is no npm lint, database-reset, backup/restore or E2E/browser-test script. Do not claim those checks ran. The backend is executed as TypeScript with `tsx`; keep runtime dependencies installed when deploying a persistent server.
+Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm run backup:verify -- <encrypted-file>` and `npm run backup:restore -- <encrypted-file> <new-directory>`. There is no npm lint or database-reset script. The backend is executed as TypeScript with `tsx`; keep runtime dependencies installed when deploying a persistent server.
 
 ## Test map
 
@@ -23,6 +23,7 @@ There is no npm lint, database-reset, backup/restore or E2E/browser-test script.
 | --- | --- |
 | `server/app.test.ts` | Authorization/state, origins, deadlines, students, drafts, lab edits, resubmission, stale grades, downloads/exports, startup/demo boundaries |
 | `server/supabase.test.ts` | Diffs, conditional cache, isolation/failures, storage guard, rollback of failed writes, bounded retries and concurrent saves |
+| `server/startup.test.ts` | Transient startup-read recovery, finite retry/deadline behavior, fail-fast errors and no extra serverless/write retries |
 | `server/serverless.test.ts` | Request-owned stores, sessions, upload/grade persistence and read-free fast paths |
 | `server/deployment.test.ts` | Vercel API rewrite order, SPA fallback, cache headers and function duration |
 | `server/uploads.test.ts` | Paths, ZIP extraction, encoding, duplicates, count/size and asset separation |
@@ -36,7 +37,7 @@ There is no npm lint, database-reset, backup/restore or E2E/browser-test script.
 
 Focused example: `node --import tsx --test server/uploads.test.ts`. After contract, auth, persistence, upload or grading changes, run the relevant suites plus the full `npm test` and build. For documentation-only changes, check links/claims and avoid adding tests that merely duplicate prose.
 
-Tests use temporary local data and mocked RPCs; they do not validate a live MongoDB deployment or execute the preview in a real browser. No current CI workflow is committed. Local success should be recorded with the runtime used and any warnings.
+Most tests use temporary data or mocked RPCs. `migrations.test.ts` and `reliability.test.ts` execute all SQL in PGlite with synthetic data (PostgreSQL 18, single connection; hosted PostgreSQL is 17). `mongo-order.test.ts` mocks the driver; it does not prove live MongoDB connectivity. `backup.test.ts` covers authenticated recovery. Playwright runs an isolated classroom and real preview in desktop/mobile browsers; `PLAYWRIGHT_CHANNEL=msedge` selects installed Edge locally, or install Chromium with `npx playwright install chromium`. Verify CI is prepared for Node 24 on Linux/Windows; it requires publication. Local success should be recorded with the runtime used and any warnings.
 
 ## Browser smoke check
 
@@ -54,7 +55,7 @@ In an isolated environment:
 
 | Symptom | Check and recovery |
 | --- | --- |
-| Vite proxy error / empty gateway | Is API on 3001? `.env` edits briefly restart it; wait, then retry a read. If `PORT` changed, align Vite proxy. |
+| Vite proxy error / empty gateway | Is API on 3001? Persistent Supabase startup retries transient reads up to three times within 45 seconds; watch the safe terminal warnings. If startup exhausts that budget, restore connectivity and restart the API/dev command, then retry the browser read. `.env` edits also restart it. If `PORT` changed, align Vite proxy. |
 | Explicit local 503 key message | Enter `SUPABASE_SECRET_KEY` privately in root `.env`, save, then use Try again. |
 | Vercel 503 | Confirm server URL/key settings, reachable Supabase, all RPC migrations and startup requirements. Health does not test the database. |
 | `PGRST202` / missing function | Compare migrations/function signatures with [supabase](supabase.md); do not blindly replay already applied SQL. |
@@ -67,16 +68,16 @@ In an isolated environment:
 | Preview misses remote assets | Expected CSP boundary; submit allowed local assets or review the project link externally. |
 | Grade absent for student | Publication, lab visibility and latest revision; resubmission clears prior grades. |
 | Export total blank | Every current task needs a saved grade; blank is not zero. |
-| Manual DB edits absent locally | Restart persistent Node; all external writes must also advance global revision to invalidate serverless cache. |
+| Manual DB edits absent locally | All external Supabase writes must advance global revision; protected requests check it. JSON/MongoDB require a restart and one writer. |
 | MongoDB transaction failure | Atlas/replica set required; bare standalone MongoDB is unsupported for writes. |
 
 Do not log full upload/RPC bodies while diagnosing a failure. Supabase snapshots include hashes and session tokens. Check counts, revision, grants and sanitized error codes first.
 
 ## Backup and recovery
 
-There is no automated backup schedule or restore command in this repo. The historical [free-tier audit](free-tier-audit.md) records a private `.data/backups/classroom-2026-10-13-before-optimization.json` recovery copy with sessions excluded; that ignored file is not guaranteed to exist in a clone and is not a complete database backup.
+The encrypted backup/verify/restore commands now support JSON and Supabase. They export the full legacy read, exclude sessions, validate references/source/assets/grades and refuse overwriting existing outputs or restore directories. MongoDB still requires provider snapshots. The owner-approved GitHub schedule runs daily at 01:15 Pakistan time, retaining encrypted artifacts for 30 days; see [activation evidence](reliability-progress.md). The historical [free-tier audit](free-tier-audit.md) records a private `.data/backups/classroom-2026-10-13-before-optimization.json` recovery copy with sessions excluded; that ignored file is not guaranteed to exist in a clone and is not a complete database backup.
 
-For JSON, stop the writer cleanly, then copy the private `labtrack.json` to protected off-site storage. For Supabase/MongoDB, use an owner-approved provider/database backup process and verify what the plan includes. Preserve schema/migrations, users/password hashes, labs/attachments, submissions/asset bytes and ordering. Marks CSV is a report, not a restore source. Credential CSV contains plaintext passwords and needs separate restricted custody.
+Run `npm run backup` to create an ignored `.data/backups/*.enc.json`; verify with `npm run backup:verify -- <file>`. Restore into a new directory using `npm run backup:restore -- <file> <new-directory>`. The CLI retains a random `.data/backup-key` unless `LABTRACK_BACKUP_KEY` supplies the same 32-byte key as base64. Keep this key separately in protected owner custody; neither an encrypted artifact nor a CSV can restore data without it. For JSON, stop the writer cleanly before exporting. For Supabase/MongoDB, use an owner-approved provider/database backup process and verify what the plan includes. Preserve schema/migrations, users/password hashes, labs/attachments, submissions/asset bytes and ordering. Marks CSV is a report, not a restore source. Credential CSV contains plaintext passwords and needs separate restricted custody.
 
 Recovery sequence:
 
@@ -90,6 +91,6 @@ The app has no archived submission revisions or immutable event ledger to recons
 
 ## Resource monitoring
 
-Monitor provider database size, egress, logs, request duration and rate-limit failures. Cached reads reduce transfers only with warm-instance reuse; changed data still reloads the snapshot. Upload bytes/base64 live in Postgres. The 400,000,000-byte guard protects lab/submission writes, not every database consumer or platform limit.
+Monitor provider database size, egress, logs, request duration and rate-limit failures. Cached reads reduce transfers only with warm-instance reuse; changed data still reloads the snapshot. Upload bytes/base64 live in Postgres. The 400,000,000-byte guard protects positive lab/submission content growth, not every consumer/provider limit. Metadata grading/publication and content reduction remain possible. Source/binary payloads are separate from routine metadata reads; instruction attachments remain in labs.
 
 For growth beyond the fixed class, evaluate object storage, selective/paginated reads, task analysis cost and tenancy together. Historical measurements/free-plan notes in the audit are dated; verify current provider limits before relying on them.
