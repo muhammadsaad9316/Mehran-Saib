@@ -45,3 +45,9 @@ Eight live HTTP checks passed: health, anonymous state, a shaped invalid-session
 Live Edge browser checks also passed at 1440×900 and 390×844: login controls visible, email-to-password Tab navigation works, no horizontal overflow and zero page errors. These checks did not sign in or submit classroom writes. Database revision remained **109** after verification.
 
 Existing user edits were preserved. No classroom reset, password reset, browser database grant or paid provider upgrade. Identified code paths have regression coverage; no test suite can promise zero future errors.
+
+## Deployment packaging correction, 15 October
+
+A subsequent UI release check found a CLI 58.5.1 archive issue: ignored directories appeared as empty entries in the manifest, but archive packing recursively included their local contents. The earlier manifest-only check was insufficient. The two affected manual uploads (`dpl_AiPnoYeYVtj1LVnzbPMF1puYHEJw` and `dpl_C7ZF3hRQt7fyNNspRvxerWiU8MF3`) were removed after a clean replacement was ready. The replacement was built from `git archive` of committed source only: 418 KB uploaded instead of 4.9 MB, with no private files. This supersedes the initial deployment listed above. `.vercelignore` now excludes the directory names themselves; the installed CLI dry run confirms zero private file or directory entries. Future CLI releases must use a fresh source export, as described in [launch](launch.md).
+
+Private local files had reached Vercel's deployment source archive; this was an exclusion failure, not evidence of public disclosure. After replacement, private file URLs returned the SPA HTML rather than file contents. This does not establish who could access a superseded archive through privileged provider tools. Local backups and the separate GitHub backup remain retained. No private content or credentials were printed in verification logs.

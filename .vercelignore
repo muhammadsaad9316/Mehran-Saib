@@ -1,9 +1,9 @@
-node_modules/
-dist/
-.data/
-data/
-.production-smoke/
-artifacts/
+node_modules
+dist
+.data
+data
+.production-smoke
+artifacts
 *.enc.json
 .env
 .env.*

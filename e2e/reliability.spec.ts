@@ -25,6 +25,13 @@ test("student blocks show immediate identity tooltips on hover, focus and touch 
   await expect(tooltip).toContainText("Fixture student 1");
   await expect(tooltip).toContainText(/Roll no\. 1 · (Awaiting review|Graded submissions)/);
   await expect(first).not.toHaveAttribute("title");
+  const appearance = await first.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { cursor: style.cursor, outlineStyle: style.outlineStyle, outlineOffset: style.outlineOffset, transform: style.transform };
+  });
+  expect(appearance.cursor).toBe("pointer");
+  if (appearance.outlineStyle !== "none") expect(Number.parseFloat(appearance.outlineOffset)).toBeLessThanOrEqual(0);
+  expect(appearance.transform).toBe("none");
   if (info.project.name === "desktop") {
     await tooltip.hover();
     await expect(tooltip).toBeVisible();
@@ -33,6 +40,7 @@ test("student blocks show immediate identity tooltips on hover, focus and touch 
   await expect(tooltip).toBeHidden();
   await last.focus();
   await expect(tooltip).toContainText("Fixture student 41");
+  expect(await last.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineOffset))).toBeLessThanOrEqual(0);
   const box = await tooltip.boundingBox();
   const bounds = await matrix.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(bounds!.x - 1);
