@@ -9,11 +9,13 @@ const directory = await mkdtemp(path.join(os.tmpdir(), "labtrack-browser-"));
 const store = new Store(directory);
 await store.open();
 const passwordHash = await hashPassword("FixtureTeacher2026!");
+const temporaryPasswordHash = `setup$${await hashPassword("48276193")}`;
 const source = `<html><head><title>Fixture page</title><style>body{font-family:sans-serif;background:#fff;color:#123}section{padding:12px;margin:8px;border:1px solid #abc}</style></head><body><h1>Fixture page</h1><img src="image.png" alt="Fixture image">${Array.from({length:20},(_,index)=>`<section class="fixture-section-${index}"><h2>Topic ${index}</h2><p>Review the project structure and keep the displayed source aligned with its submitted revision.</p><button data-action="item-${index}">Read section</button></section>`).join("")}</body></html>`;
 const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCBkAAAAASUVORK5CYII=";
 await store.mutate(data => {
   data.users = [{ id: "fixture-teacher", name: "Fixture teacher", email: "fixture@example.test", role: "teacher", passwordHash },
-    ...Array.from({length:41},(_,index)=>({ id:`fixture-student-${index+1}`,name:`Fixture student ${index+1}`,email:`fixture${index+1}@example.test`,role:"student" as const,rollNumber:String(index+1),passwordHash }))];
+    ...Array.from({length:41},(_,index)=>({ id:`fixture-student-${index+1}`,name:`Fixture student ${index+1}`,email:`fixture${index+1}@example.test`,role:"student" as const,rollNumber:String(index+1),passwordHash: index>=39 ? temporaryPasswordHash : passwordHash,
+      ...(index>=39 ? {mustChangePassword:true,authVersion:`fixture-temp-${index+1}`} : {}) }))];
   data.labs = [{ id: "fixture-lab", revision: 1, title: "Reliability fixture", description: "Isolated browser test classroom", dueDate: "", totalMarks:20,published:true,tasks:[1,2].map(index=>({id:`fixture-task-${index}`,title:`Task ${index}`,description:"Build a heading.",maxMarks:10,requirements:[{id:`heading-${index}`,label:"Heading",type:"tag" as const,value:"h1"}]})) }];
   data.submissions = [1,2].map(index=>({id:`fixture-submission-${index}`,studentId:`fixture-student-${index}`,labId:"fixture-lab",taskId:"fixture-task-1",revision:1,files:[{path:"index.html",content:source}],assets:Array.from({length:index===1?9:1},(_,asset)=>({path:asset?`image-${asset}.png`:"image.png",mimeType:"image/png"})),binaryAssets:Array.from({length:index===1?9:1},(_,asset)=>({path:asset?`image-${asset}.png`:"image.png",mimeType:"image/png",base64:image})),link:null,submittedAt:new Date().toISOString(),status:"submitted" as const,late:false}));
 });

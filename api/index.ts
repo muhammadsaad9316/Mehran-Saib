@@ -38,7 +38,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     return;
   }
-  const session = /(?:^|;\s*)labtrack_session=([a-f0-9]{64})(?:;|$)/.test(req.headers.cookie || "");
+  const session = /(?:^|;\s*)labtrack_session=((?:setup_)?[a-f0-9]{64})(?:;|$)/.test(req.headers.cookie || "");
   if (read && pathname === "/api/state" && !session) {
     reply(200, { user: null, demo: false, students: [], labs: [], submissions: [], activity: [] });
     return;

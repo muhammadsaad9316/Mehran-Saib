@@ -1,5 +1,35 @@
 import { test, expect, type Page } from "@playwright/test";
 
+test("first student login requires a personal password and subsequent login uses only that password", async ({page},info)=>{
+  const roll=info.project.name==="desktop"?"40":"41";
+  await page.goto("/");
+  await page.getByLabel("Email or student roll number").fill(roll);
+  await page.getByLabel("Password",{exact:true}).fill("48276193");
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Create your password",exact:true})).toBeVisible();
+  const pending=await page.request.get("/api/state");
+  expect((await pending.json()).labs).toEqual([]);
+  await page.getByLabel("New password",{exact:true}).fill("Personal fixture 2026!");
+  await page.getByLabel("Confirm new password",{exact:true}).fill("Mismatched fixture 2026!");
+  await page.getByRole("button",{name:"Save password and continue"}).click();
+  await expect(page.getByRole("alert")).toContainText("do not match");
+  await page.getByLabel("Confirm new password",{exact:true}).fill("Personal fixture 2026!");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:`artifacts/password-setup-${info.project.name}.png`});
+  await page.getByRole("button",{name:"Save password and continue"}).click();
+  await expect(page.getByRole("heading",{name:"Create your password",exact:true})).toBeHidden();
+  await expect(page.getByRole("button",{name:"Sign out",exact:true}).first()).toBeVisible();
+  await page.getByRole("button",{name:"Sign out",exact:true}).first().click();
+  await page.getByLabel("Email or student roll number").fill(roll);
+  await page.getByLabel("Password",{exact:true}).fill("48276193");
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("incorrect");
+  await page.getByLabel("Password",{exact:true}).fill("Personal fixture 2026!");
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Sign out",exact:true}).first()).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Create your password",exact:true})).toBeHidden();
+});
+
 async function signIn(page: Page) {
   await page.goto("/");
   await page.getByLabel("Email or student roll number").fill("fixture@example.test");

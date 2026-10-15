@@ -23,6 +23,7 @@ For an AI coding tool, read [../AGENTS.md](../AGENTS.md), [AI development](ai-de
 | File responsibilities and data flow | [architecture.md](architecture.md) |
 | Screens, styling and preview | [frontend.md](frontend.md) |
 | Accounts, roles and mutations | [backend.md](backend.md) |
+| Student temporary codes and first-login password creation | [student-logins.md](student-logins.md) |
 | Endpoints and payloads | [api.md](api.md) |
 | SQL schema, migrations and concurrency | [supabase.md](supabase.md) |
 | Environment variables | [configuration.md](configuration.md) |

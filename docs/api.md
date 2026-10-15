@@ -12,6 +12,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `GET /api/ready` | Teacher, or Vercel monitor with configured private token | Optional `X-Readiness-Token` for monitor | 200 `{ "ok": true }` after database probe; safe 503 on failure |
 | `GET /api/state` | Public, filtered by session | None | 200 `AppState` |
 | `POST /api/auth/login` | Public | `{ email, password }` | 200 `User` + session cookie |
+| `POST /api/auth/password` | Signed-in student awaiting first setup | `{ newPassword }`, 12–256 characters | 200 `User`, setup completed and session rotated |
 | `POST /api/auth/demo` | Loopback demo only | `{ role: "teacher" \| "student" }` | 200 `User` + cookie; production 403 |
 | `POST /api/auth/logout` | Persistent server accepts without session; Vercel requires shaped cookie | No body required | 200 `{ "ok": true }`, session removed/cookie cleared |
 | `POST /api/students` | Teacher | `{ name, email, rollNumber, password }` | 201 `User` |
@@ -28,7 +29,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `GET /api/reports.xlsx?labId=...` | Teacher | Optional lab ID; first lab by default | 200 styled Excel workbook attachment |
 | `GET /api/reports/print?labId=...` | Teacher | Repeat `labId` to include multiple labs; no IDs or `select=1` opens the lab picker | 200 selection page or printable HTML |
 
-There are no delete, registration, reset-password, student-update or separate lab/submission-list endpoints. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
+There are no delete, registration, forgotten-password recovery, student-update or separate lab/submission-list endpoints. First-login password creation is restricted to signed-in pending accounts. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
 
 ## State visibility
 
@@ -44,6 +45,7 @@ There are no delete, registration, reset-password, student-update or separate la
 ```
 
 - Unsigned state contains empty arrays and no user. Local demo state can report `demo=true`.
+- A signed-in user with `mustChangePassword=true` receives only their public user and empty classroom arrays. All other classroom routes return 403 until password setup completes.
 - Teachers receive the roster, all labs, all submissions and activity.
 - Students receive only themselves in `students`, published labs and their own submissions for those labs. Draft grades are removed and their status appears `submitted`.
 - Password hashes, session records and binary asset base64 never appear in state. State includes instruction base64 and file paths with empty content plus `sourceOmitted=true`. Source is loaded on demand through the protected source endpoint. Asset metadata is `{ path, mimeType }`; fetch bytes through the protected file route.
@@ -57,6 +59,8 @@ There are no delete, registration, reset-password, student-update or separate la
 The `email` field accepts a roll number or email. Rolls are canonicalized (e.g. `"01"` → `"1"`). Login identity length is at most 254; password length is 1–256. Incorrect credentials return a generic 401. Login limits return 429 with a 15-minute retry message; see [backend](backend.md).
 
 Student creation requires a nonblank name up to 100 characters, valid unique email up to 254, unique roll 1–41 and password 12–256. Both string and number roll inputs can canonicalize, although public records use strings. Duplicate identity returns 409. The response excludes the password/hash.
+
+Newly created students must replace that initial password on first login. The public `User.mustChangePassword` flag selects the setup screen. Temporary logins use a 15-minute `setup_`-prefixed opaque cookie; successful setup rotates to a normal seven-day cookie, invalidates previous sessions and rejects the temporary code thereafter. Password hashes and credential versions stay private. See [student logins](student-logins.md) for the owner-authorized 41-student reset and private credential sheet.
 
 ## Lab payload
 

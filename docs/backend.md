@@ -30,7 +30,7 @@ Login accepts email or canonical roll number. A successful login issues a random
 
 Persistent servers limit failed attempts in a bounded in-memory map keyed by IP/identity: eight failures per 15 minutes. Vercel also invokes the Supabase limiter across instances: a SHA-256 bucket per registered user, with one shared bucket for unregistered identities. The database counts attempts before verification and clears the bucket on success. Do not claim persistent servers have shared distributed limiting.
 
-There is no Supabase Auth, self-registration, email verification, password-reset UI or account deletion route. The teacher creates students; new passwords must be 12–256 characters. See [configuration](configuration.md) and [operations](operations.md) before changing credential workflows.
+There is no Supabase Auth, self-registration, email verification, forgotten-password UI or account deletion route. The teacher creates students; their initial passwords must be 12–256 characters and are replaced through mandatory first-login setup. The owner-authorized class reset can generate individual eight-digit temporary codes. Setup sessions are restricted to 15 minutes and a minimal state; password creation requires the current account/session version, rotates the cookie and invalidates older sessions. Both private hash and credential version are excluded from projections. See [student logins](student-logins.md), [configuration](configuration.md) and [operations](operations.md).
 
 ## Public/private projections
 

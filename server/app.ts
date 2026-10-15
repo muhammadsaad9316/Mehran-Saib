@@ -48,6 +48,7 @@ import {
 
 const COOKIE_NAME = "labtrack_session";
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
+const PASSWORD_SETUP_DURATION = 15 * 60 * 1000;
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -131,7 +132,7 @@ function passwordValue(value: unknown, minimum = 1): string {
 }
 
 function publicUser(user: StoredUser): User {
-  const { passwordHash: _, ...safe } = user;
+  const { passwordHash: _, authVersion: __, ...safe } = user;
   return safe;
 }
 
@@ -473,7 +474,7 @@ export async function createApp(options: AppOptions = {}) {
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
   app.use("/api", async (req, res, next) => {
     const currentToken = req.cookies[options.sessionCookieName ?? COOKIE_NAME];
-    if (!options.serverless && ((typeof currentToken === "string" && /^[a-f0-9]{64}$/.test(currentToken)) || req.path === "/auth/login")) await store.refresh();
+    if (!options.serverless && ((typeof currentToken === "string" && /^(?:setup_)?[a-f0-9]{64}$/.test(currentToken)) || req.path === "/auth/login")) await store.refresh();
     else await store.ensureFresh();
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.get("origin");
@@ -501,8 +502,11 @@ export async function createApp(options: AppOptions = {}) {
         (item) => item.id === token && item.expiresAt > Date.now(),
       );
     res.locals.user = session
-      ? store.data.users.find((user) => user.id === session.userId)
+      ? store.data.users.find((user) => user.id === session.userId && user.authVersion === session.authVersion)
       : undefined;
+    if (res.locals.user?.mustChangePassword &&
+        !["/state", "/auth/password", "/auth/logout", "/auth/login"].includes(req.path))
+      return next(new HttpError(403, "Create your own password before opening your workspace."));
     next();
   });
 
@@ -536,8 +540,12 @@ export async function createApp(options: AppOptions = {}) {
     maxAge: SESSION_DURATION,
   };
   async function signIn(user: StoredUser, res: Response) {
-    const token = sessionToken();
+    const token = (user.mustChangePassword ? "setup_" : "") + sessionToken();
+    const duration = user.mustChangePassword ? PASSWORD_SETUP_DURATION : SESSION_DURATION;
     await store.mutate((data) => {
+      const current = data.users.find(item => item.id === user.id);
+      if (!current || current.passwordHash !== user.passwordHash || current.authVersion !== user.authVersion)
+        throw new HttpError(401, "Your login changed. Sign in again with your current password.");
       const own = data.sessions
         .filter((item) => item.userId === user.id)
         .slice(-9)
@@ -550,10 +558,11 @@ export async function createApp(options: AppOptions = {}) {
       data.sessions.push({
         id: token,
         userId: user.id,
-        expiresAt: Date.now() + SESSION_DURATION,
+        expiresAt: Date.now() + duration,
+        ...(user.authVersion ? { authVersion: user.authVersion } : {}),
       });
-    });
-    res.cookie(options.sessionCookieName ?? COOKIE_NAME, token, cookieOptions);
+    }, user.id);
+    res.cookie(options.sessionCookieName ?? COOKIE_NAME, token, { ...cookieOptions, maxAge: duration });
     res.json(publicUser(user));
   }
 
@@ -567,6 +576,7 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.get("/api/state", (_req, res) => {
     const user = res.locals.user as StoredUser | undefined;
+    if (user?.mustChangePassword) return res.json({ user: publicUser(user), demo, students: [], labs: [], submissions: [], activity: [] });
     const teacher = user?.role === "teacher";
     const state: AppState = {
       user: user ? publicUser(user) : null,
@@ -641,6 +651,31 @@ export async function createApp(options: AppOptions = {}) {
     if (options.serverless) await store.loginAttempt(sharedKey, true);
     await signIn(user, res);
   });
+  app.post("/api/auth/password", async (req, res) => {
+    const user = actor(res, "student");
+    if (!user.mustChangePassword) throw new HttpError(400, "Your personal password is already set.");
+    const password = passwordValue(req.body?.newPassword, 12);
+    if (await verifyPassword(password, user.passwordHash)) throw new HttpError(400, "Choose a new personal password.");
+    const passwordHash = await hashPassword(password);
+    const authVersion = randomUUID();
+    const token = sessionToken();
+    const currentToken = req.cookies[options.sessionCookieName ?? COOKIE_NAME];
+    const result = await store.mutate(data => {
+      const current = data.users.find(item => item.id === user.id);
+      const session = data.sessions.find(item => item.id === currentToken && item.userId === user.id && item.expiresAt > Date.now());
+      if (!current || !current.mustChangePassword || current.passwordHash !== user.passwordHash ||
+          current.authVersion !== user.authVersion || !session || session.authVersion !== current.authVersion)
+        throw new HttpError(409, "Your login changed. Sign in again before setting your password.");
+      current.passwordHash = passwordHash;
+      current.authVersion = authVersion;
+      current.mustChangePassword = false;
+      // Versions revoke older sessions without rewriting classmates' session positions.
+      data.sessions.push({ id: token, userId: user.id, expiresAt: Date.now() + SESSION_DURATION, authVersion });
+      return current;
+    }, user.id);
+    res.cookie(options.sessionCookieName ?? COOKIE_NAME, token, cookieOptions);
+    res.json(publicUser(result));
+  });
   app.post("/api/auth/demo", async (req, res) => {
     const localAddress = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
       req.socket.remoteAddress || "",
@@ -688,7 +723,9 @@ export async function createApp(options: AppOptions = {}) {
       email,
       rollNumber,
       role: "student",
-      passwordHash: await hashPassword(password),
+      passwordHash: `setup$${await hashPassword(password)}`,
+      mustChangePassword: true,
+      authVersion: randomUUID(),
     };
     await store.mutate((data) => {
       if (

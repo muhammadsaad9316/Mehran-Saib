@@ -210,7 +210,7 @@ export class SupabasePersistence {
     return result.file || undefined;
   }
 
-  async write(previous: Database, next: Database, deadline?: AbortSignal): Promise<Database | undefined> {
+  async write(previous: Database, next: Database, deadline?: AbortSignal, credentialUserId?: string): Promise<Database | undefined> {
     const upserts: {
       collection: string;
       id: string;
@@ -244,7 +244,8 @@ export class SupabasePersistence {
       for (const name of collections) {
         const changed = new Set([...upserts, ...deletions].filter(item => item.collection === name).map(item => item.id));
         for (const item of previous[name])
-          if (changed.has(item.id) || name === "labs" || name === "users") expected.set(`${name}:${item.id}`, { collection: name, id: item.id, document: item });
+          // Independent credential changes depend on their account, not classmates' passwords.
+          if (changed.has(item.id) || name === "labs" || (name === "users" && (!credentialUserId || item.id === credentialUserId))) expected.set(`${name}:${item.id}`, { collection: name, id: item.id, document: item });
         for (const id of changed) if (!expected.has(`${name}:${id}`)) expected.set(`${name}:${id}`, { collection: name, id, document: null });
       }
     }

@@ -17,6 +17,7 @@ import { stableJson } from "./serialization.js";
 
 export interface StoredUser extends User {
   passwordHash: string;
+  authVersion?: string;
 }
 export interface StoredSubmission extends Submission {
   binaryAssets?: { path: string; mimeType: string; base64: string }[];
@@ -25,6 +26,7 @@ export interface Session {
   id: string;
   userId: string;
   expiresAt: number;
+  authVersion?: string;
 }
 export interface Database {
   users: StoredUser[];
@@ -125,7 +127,7 @@ export class Store {
     }
   }
 
-  async mutate<T>(change: (database: Database) => T): Promise<T> {
+  async mutate<T>(change: (database: Database) => T, credentialUserId?: string): Promise<T> {
     const operation = this.pending.then(async () => {
       await this.ensureFresh();
       const deadline = this.writeAttempts > 1 ? AbortSignal.timeout(45000) : undefined;
@@ -135,7 +137,7 @@ export class Store {
       if (this.supabase) {
         for (let attempt = 0; ; attempt++) {
           try {
-            const refreshed = await this.supabase.write(previous, next, deadline);
+            const refreshed = await this.supabase.write(previous, next, deadline, credentialUserId);
             if (refreshed) { this.data = refreshed; return result; }
             break;
           } catch (error) {

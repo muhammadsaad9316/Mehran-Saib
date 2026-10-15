@@ -17,11 +17,11 @@ The existing project's public identifier is `akudfcgksdjlipxxwfdu`; its [dashboa
 
 | Collection | Document contents |
 | --- | --- |
-| `users` | Public user fields plus salted `passwordHash` |
+| `users` | Public user fields/setup flag plus private salted `passwordHash` and optional `authVersion` |
 | `labs` | Tasks, requirements and optional base64 instruction attachment |
 | `submissions` | Source/asset metadata, revision and optional grade; text/base64 live in private payloads |
 | `activity` | Recent workflow events, capped to 100 by the app |
-| `sessions` | Opaque session token as ID, user ID, numeric expiry |
+| `sessions` | Opaque session token as ID, user ID, numeric expiry and optional matching `authVersion` |
 
 Uploads consume **database** bytes, including base64 overhead. A zero Supabase Storage usage figure does not mean project uploads use no storage.
 

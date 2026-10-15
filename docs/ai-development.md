@@ -17,7 +17,7 @@ Writes: Store.mutate, atomic diff, replay validation on bounded conflicts.
 Grading: explicit teacher action; draft privacy; current submission revision.
 Uploads: static source/raster projects; private bytes; opaque iframe preview.
 Analysis: parser checks/similarity evidence only, no AI detection or marks.
-Limits: rolls 1–41; no multi-class tenancy, password reset or old revisions.
+Limits: rolls 1–41; mandatory first-login password creation; no forgotten-password UI, multi-class tenancy or old revisions.
 Checks: npm test, npm run build, npm run test:browser; isolated data for all mutations.
 ```
 

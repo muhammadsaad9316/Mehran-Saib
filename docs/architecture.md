@@ -76,6 +76,8 @@ These are logical relationships, not separate SQL tables or foreign keys. Tasks/
 
 Public `User` excludes `passwordHash`; public `Submission` excludes binary base64. Server `Database` contains these private fields and sessions. Authorized state includes file paths with empty content and sourceOmitted=true, plus instruction base64. Selected source and images use authenticated, revision-checked reads. Teachers see all students/labs/submissions/activity. Students see themselves, published labs and their own work, with draft grades removed.
 
+Student first-login setup is an exception: `mustChangePassword=true` permits only minimal own-user state, password creation and sign-out/login. No classroom state or routes are accessible until setup completes. Private user/session credential versions revoke older sessions; setup cookies use a distinct prefix and a 15-minute lifetime. See [student logins](student-logins.md).
+
 ## Invariants
 
 - User IDs remain stable. Student emails/rolls are unique; rolls are canonical strings 1–41.

@@ -25,6 +25,8 @@ The frontend is a React 19 TypeScript SPA built by Vite 7 with Tailwind CSS 4 an
 
 Teacher/student portals load through `React.lazy` only when their role is rendered. Suspense uses the existing loading style; the root boundary offers reload if a module cannot load. Login does not download either portal. The unused chart and Recharts dependency were removed.
 
+When the signed-in user has `mustChangePassword=true`, `PasswordSetup.tsx` replaces the workspace with a focused personal-password form. Students enter the password twice; mismatches stay on the form. Successful saves update the user before refreshing state, so a failed refresh does not prompt another password change. Server gates enforce the restriction independently of the UI. See [student logins](student-logins.md).
+
 Dashboard submission blocks show the student's name, roll number and status immediately on hover, keyboard focus or touch. Escape or tapping elsewhere dismisses the tooltip; names come from the authorized roster, with no extra request. Tooltips stay within the progress row at either edge.
 
 ## State and requests

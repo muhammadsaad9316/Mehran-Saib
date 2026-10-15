@@ -14,6 +14,8 @@ Use isolated data for development checks. Real classroom credentials, uploaded w
 | `npm run demo:analysis` | Separate local matching demo on 3012; build required |
 | `npm run prepare:class` | Prepare private credentials and update `.env`; see side effects in onboarding |
 | `npm run provision:class` | Provision the fixed hosted classroom; not a test command |
+| `npm run prepare:student-logins` | Prepare private temporary codes for rolls 1–41; no account changes |
+| `npm run apply:student-logins` | Owner-authorized atomic student password reset and mandatory first setup; not a test command |
 
 Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm run backup:verify -- <encrypted-file>` and `npm run backup:restore -- <encrypted-file> <new-directory>`. There is no npm lint or database-reset script. The backend is executed as TypeScript with `tsx`; keep runtime dependencies installed when deploying a persistent server.
 

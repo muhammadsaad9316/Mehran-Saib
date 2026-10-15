@@ -20,6 +20,7 @@ import LabEditor from "./LabEditor";
 import BrandLogo from "./BrandLogo";
 import QuordixLogo from "./QuordixLogo";
 import { allowNavigation } from "./navigation-guard";
+import PasswordSetup from "./PasswordSetup";
 const TeacherPortal = lazy(() => import("./TeacherPortal"));
 const StudentPortal = lazy(() => import("./StudentPortal"));
 const date = (
@@ -241,6 +242,13 @@ export default function App() {
         }}
       />
     );
+  if (state.user.mustChangePassword) return <PasswordSetup user={state.user} error={error} onLogout={logout} onSaved={async user => {
+    setState(current => current ? { ...current, user } : current);
+    setToast("Password saved. Use your new password next time.");
+    setError("");
+    try { await refresh(); }
+    catch (cause) { setError(`Your password was saved, but the workspace could not refresh. ${(cause as Error).message}`); }
+  }} />;
   const teacher = state.user.role === "teacher";
   return (
     <div

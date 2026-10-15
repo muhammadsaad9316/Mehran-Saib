@@ -175,6 +175,12 @@
   letter-spacing: 1.3px;
   font-weight: 600;
 }
+.password-setup-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--workspace-paper); }
+.password-setup-page .login-form { width: min(100%, 420px); margin: 0; padding: 28px; border: 1px solid var(--workspace-edge); border-radius: 16px; background: var(--workspace-sheet); }
+.password-setup-form .brand { margin-bottom: 28px; }
+.password-setup-form .password-setup-help { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 18px; font-size: 12px; line-height: 1.6; color: var(--workspace-muted); }
+.password-setup-help svg { flex-shrink: 0; margin-top: 3px; }
+.password-setup-form .error { margin-bottom: 16px; }
 .login-form h2 {
   margin: clamp(6px, 1vh, 12px) 0 4px;
   font-family: "Manrope Variable", sans-serif;

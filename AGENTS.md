@@ -13,6 +13,7 @@ This is a React/TypeScript/Vite SPA with an Express API and private Supabase per
 - `src/api.ts`: same-origin requests; `src/preview.ts`: submitted-code CSP/path transforms.
 - `server/app.ts`: routes, validation, startup, roles/ownership and public projections.
 - `server/auth.ts`: hashes/tokens; `server/store.ts`: private types and mutation queue.
+- `server/student-passwords.ts`: explicitly authorized 41-student temporary-code preparation/application; private files only. `src/PasswordSetup.tsx`: mandatory personal-password creation. Pending accounts cannot access classroom routes; credential versions and setup-session formats must be preserved.
 - `server/supabase.ts`: RPCs, diffs, revision/cache/error handling.
 - `server/uploads.ts`, `analysis.ts`, `instructions.ts`, `marks-sheet.ts`: domain services.
 - `api/index.ts`: request-owned Vercel apps and inexpensive early responses.

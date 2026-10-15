@@ -13,7 +13,8 @@ export async function verifyPassword(
   password: string,
   stored: string,
 ): Promise<boolean> {
-  const [salt, encoded] = stored.split(":");
+  // Older app versions must not accept temporary credentials as normal passwords.
+  const [salt, encoded] = (stored.startsWith("setup$") ? stored.slice(6) : stored).split(":");
   if (!salt || !encoded || encoded.length !== 128) return false;
   const expected = Buffer.from(encoded, "hex");
   const actual = (await scrypt(password, salt, 64)) as Buffer;

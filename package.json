@@ -13,6 +13,8 @@
     "backup": "tsx server/backup.ts backup",
     "backup:verify": "tsx server/backup.ts verify",
     "backup:restore": "tsx server/backup.ts restore",
+    "prepare:student-logins": "tsx server/student-passwords.ts prepare",
+    "apply:student-logins": "tsx server/student-passwords.ts apply",
     "prepare:class": "tsx server/class-setup.ts --prepare",
     "provision:class": "tsx server/class-setup.ts"
   },
