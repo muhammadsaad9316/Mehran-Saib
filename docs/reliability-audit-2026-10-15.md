@@ -10,9 +10,9 @@ The original audit generated a report without changing application behavior or l
 
 ## Implementation follow-up, 15 October 2026
 
-All 15 findings have implementation work recorded in the [current verification and release checklist](reliability-progress.md). It distinguishes tested local changes, the live compatible database migration and GitHub backup activation from application deployment. The remaining sections preserve the original audit evidence and findings.
+All 15 findings have implementation work recorded in the [current verification and release checklist](reliability-progress.md). It records the deployed application, live compatible database migration, verified GitHub backup and the limits of each check. The remaining sections preserve the original audit evidence and findings.
 
-The hosted migration separates private project bytes, adds scoped conflict checks and retains legacy RPC compatibility. Full document checksums matched across every collection before/after migration. No real submissions or marks were changed as a test. The Node 24 suite passed 97 tests and six desktop/mobile browser checks passed. These reduce identified risks without promising zero future errors.
+The hosted migration separates private project bytes, adds scoped conflict checks and retains legacy RPC compatibility. Full document checksums matched across every collection before/after migration. No real submissions or marks were changed as a test. The Node 24 suite passed 98 tests and six desktop/mobile browser checks passed. These reduce identified risks without promising zero future errors.
 
 ## Verified audit baseline, before implementation
 

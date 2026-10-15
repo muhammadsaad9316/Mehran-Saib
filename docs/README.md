@@ -54,7 +54,7 @@ For an AI coding tool, read [../AGENTS.md](../AGENTS.md), [AI development](ai-de
 
 ## Evidence and limits
 
-**15 October implementation:** see [reliability progress](reliability-progress.md) for the current 97-test Node 24 run, browser checks, compatible hosted migration, encrypted recovery drill and release/backup status. These supersede the dated observations below where behavior changed.
+**15 October implementation:** see [reliability progress](reliability-progress.md) for the current 98-test Node 24 run, browser checks, compatible hosted migration, encrypted recovery drill and release/backup status. These supersede the dated observations below where behavior changed.
 
 The guides cover all HTTP routes, runtime entrypoints, persistence adapters and frontend modules. Read-only checks on 13 October 2026 confirmed hosted migration history, RLS on all three LabTrack tables, denied browser `SELECT`/RPC execution and allowed server access. These checks did not read passwords, session tokens or submitted source.
 

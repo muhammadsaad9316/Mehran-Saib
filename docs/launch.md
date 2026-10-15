@@ -1,6 +1,6 @@
 # Deployment: Vercel and Supabase
 
-The documented production site is [labtrack-lilac.vercel.app](https://labtrack-lilac.vercel.app). Vercel hosts the React bundle and Express handler; Supabase stores the classroom. Existing notes record the Vercel `labtrack` project with Node 24 and GitHub `main` integration. This documentation review did not change deployment settings or publish a release.
+The documented production site is [labtrack-lilac.vercel.app](https://labtrack-lilac.vercel.app). Vercel hosts the React bundle and Express handler; Supabase stores the classroom. Existing notes record the Vercel `labtrack` project with Node 24 and GitHub `main` integration. The dated documentation review did not publish a release; the separate authorized 15 October reliability release is recorded in [reliability progress](reliability-progress.md).
 
 ## Configuration in the repository
 
@@ -23,7 +23,7 @@ The frontend uses relative `/api` requests and same-origin cookies. There is no 
 4. Deploy through the configured project's normal release process. The earlier CLI fallback `vercel deploy --prod --yes --archive=tgz` is an actual production release, not a dry run; inspect the installed CLI help and project selection before use.
 5. Verify health and anonymous state, then normal role-filtered sign-in/out without modifying real submissions. Exercise upload/grading with isolated staging data for a full smoke check. Review failures and request duration.
 
-The prepared `.github/workflows/verify.yml` runs Node 24 tests/build on Linux and Windows, browser checks on Linux and a high/critical runtime audit. It becomes active when published. The separately published daily backup workflow is tracked in [reliability progress](reliability-progress.md). A successful build is not proof that production environment variables or migrations exist.
+The published `.github/workflows/verify.yml` runs Node 24 tests/build on Linux and Windows, browser checks on Linux and a high/critical runtime audit. Its Linux and Windows jobs passed for application release `74c7e84`. The separately published daily backup workflow is tracked in [reliability progress](reliability-progress.md). A successful build is not proof that production environment variables or migrations exist.
 
 ## Serverless behavior
 
