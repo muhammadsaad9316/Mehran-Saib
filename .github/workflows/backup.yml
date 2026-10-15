@@ -1,0 +1,38 @@
+name: Classroom backup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 20 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: classroom-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Encrypt and verify snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          LABTRACK_BACKUP_KEY: ${{ secrets.LABTRACK_BACKUP_KEY }}
+        run: |
+          node -e "if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY || !process.env.LABTRACK_BACKUP_KEY) process.exit(1)"
+          node --import tsx server/backup.ts backup backup.enc.json
+          node --import tsx server/backup.ts verify backup.enc.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: classroom-backup-${{ github.run_id }}
+          path: backup.enc.json
+          if-no-files-found: error
+          retention-days: 30
