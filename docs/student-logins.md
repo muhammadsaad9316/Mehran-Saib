@@ -21,3 +21,11 @@ The script uses root `.env`, without editing it. It supports the existing JSON/S
 `server/auth.ts` verifies scrypt hashes; `server/app.ts` enforces setup and versions; `api/index.ts` recognizes limited setup sessions; `src/PasswordSetup.tsx` owns the form. Credential mutations scope user dependencies to the account being changed, while still guarding every touched document. This permits students to create passwords independently without treating a classmate's password change as a conflict.
 
 `server/first-login.test.ts` exercises credential generation/application, privacy gates, session revocation, changed-password rejection, teacher/work preservation and 41 independent saves against an actual isolated PostgreSQL engine. Browser tests cover desktop/mobile setup, mismatch feedback, temporary-code rejection after setup and login with the chosen password.
+
+## Activation record — 15 October 2026
+
+Release `68f3321` passed 100 tests on Node 24 and ten desktop/mobile browser checks, followed by successful Linux/Windows [GitHub verification](https://github.com/muhammadsaad9316/Mehran-Saib/actions/runs/38770755257). Production deployment `dpl_6qikUD5jinyKH6YhdEMsjtp8ZZnG` was READY before account activation. An encrypted pre-change backup was created and verified; the private sheet was generated without account changes, then applied in one authorized operation.
+
+Post-activation revision: **111**, with 41 student accounts, 41 distinct temporary credentials, 41 pending setup flags and zero retained student sessions. Teacher document and session fingerprints matched the pre-change values. Full lab, submission and activity checksums also matched (2 labs, 6 submissions, 25 activity entries). The sheet contains exactly rolls 1–41 and unique eight-digit codes. No credentials, hashes, tokens or classroom source were printed. Live checks verified the new bundle, health and denial of unauthenticated password changes; real student logins were not used as mutation tests. The fresh encrypted [GitHub backup after activation](https://github.com/muhammadsaad9316/Mehran-Saib/actions/runs/38771420786) succeeded.
+
+The older class-credentials files no longer contain the current student passwords. Use the private `student-temporary-passwords.csv` only until students create personal passwords; it never contains their chosen passwords.
