@@ -6,7 +6,6 @@ import {
   BookOpen,
   CalendarBlank,
   CaretDown,
-  CaretRight,
   CheckCircle,
   Clock,
   DownloadSimple,
@@ -124,64 +123,38 @@ export default function StudentPortal({
       <a className="teacher-skip-link" href="#student-content">
         Skip to content
       </a>
-      <aside className="teacher-rail" aria-label="Student workspace">
-        <a
-          href="#labs"
-          className="teacher-rail-logo"
-          aria-label="LabTrack student labs"
-          onClick={(event) => {
-            event.preventDefault();
-            navigate("labs");
-          }}
-        >
-          <BrandLogo />
-        </a>
-        <span className="teacher-rail-label">Workspace</span>
-        <nav aria-label="Student navigation">
-          {(
-            [
-              ["labs", "My labs", BookOpen],
-              ["submissions", "My submissions", Tray],
-            ] as const
-          ).map(([item, label, Icon]) => (
-            <button
-              key={item}
-              className={page === item ? "active" : ""}
-              aria-current={page === item ? "page" : undefined}
-              onClick={() => navigate(item)}
-            >
-              <Icon size={23} weight={page === item ? "fill" : "regular"} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="student-rail-footer">
-          <a
-            href="https://quordix.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="student-quordix-credit"
-            title="Built by Quordix"
-          >
-            <span className="credit-label">Built By</span>
-            <QuordixLogo className="quordix-logo-svg" />
-          </a>
-        </div>
-      </aside>
-      <div className="teacher-workspace">
-        <header className="teacher-header">
+      <header className="student-header">
+        <div className="student-header-inner">
           <a
             href="#labs"
-            className="teacher-brand"
+            className="student-brand"
+            aria-label="LabTrack student labs"
             onClick={(event) => {
               event.preventDefault();
               navigate("labs");
             }}
           >
-            <span className="teacher-header-mobile-brand"><BrandLogo /></span>
-            <span className="teacher-breadcrumb"><BookOpen size={17} /> Learning <CaretRight size={12} /><strong>{page === "labs" ? "My labs" : "My submissions"}</strong></span>
+            <BrandLogo />
           </a>
-          <div className="teacher-account">
+          <nav className="student-navigation" aria-label="Student navigation">
+            {(
+              [
+                ["labs", "My labs", BookOpen],
+                ["submissions", "My submissions", Tray],
+              ] as const
+            ).map(([item, label, Icon]) => (
+              <button
+                key={item}
+                className={page === item ? "active" : ""}
+                aria-current={page === item ? "page" : undefined}
+                onClick={() => navigate(item)}
+              >
+                <Icon size={20} weight={page === item ? "fill" : "regular"} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="student-account">
             {state.demo && (
               <button
                 className="teacher-text-button teacher-demo-button"
@@ -190,7 +163,7 @@ export default function StudentPortal({
                 Teacher demo
               </button>
             )}
-            <span className="teacher-identity student-identity">
+            <span className="student-identity">
               <span
                 className="teacher-avatar"
                 title={state.user?.name || `Roll ${state.user?.rollNumber}`}
@@ -201,7 +174,7 @@ export default function StudentPortal({
                 <strong>
                   {state.user?.name || `Roll ${state.user?.rollNumber}`}
                 </strong>
-                <small>Roll no. {state.user?.rollNumber}</small>
+                <small>Student · Roll no. {state.user?.rollNumber}</small>
               </span>
             </span>
             <button
@@ -213,7 +186,9 @@ export default function StudentPortal({
               <SignOut size={21} />
             </button>
           </div>
-        </header>
+        </div>
+      </header>
+      <div className="teacher-workspace">
         <main className="teacher-main" id="student-content" tabIndex={-1}>
           {current && page === "labs" && (
             <button className="student-back" onClick={() => setSelectedLab("")}>
@@ -224,7 +199,7 @@ export default function StudentPortal({
             <div className="teacher-title-copy">
               {!current && (
                 <span className="teacher-eyebrow">
-                  <span className="teacher-course-dot" /> Your learning workspace
+                  <BookOpen size={15} /> Your learning workspace
                 </span>
               )}
               {current && page === "labs" && (
@@ -245,7 +220,7 @@ export default function StudentPortal({
                 <p>
                   {page === "submissions"
                     ? "Your submitted work, published marks, and feedback in one place."
-                    : "A clear path from each assignment to your next submission."}
+                    : "Your coursework, from the first task to the final submission."}
                 </p>
               )}
             </div>
@@ -324,13 +299,13 @@ export default function StudentPortal({
           )}
 
           {page === "labs" && !current && (
-            <section className="student-sheet" aria-label="Your labs">
+            <section className="student-sheet student-lab-library" aria-label="Your labs">
               <div className="student-section-heading">
                 <div>
                   <h2>
                     My labs <span>{labs.length}</span>
                   </h2>
-                  <p>Select a task to submit or resubmit work. Open a lab for its instructions.</p>
+                  <p>Everything you need for your next submission.</p>
                 </div>
               </div>
               {labs.length > 0 && (
@@ -360,10 +335,13 @@ export default function StudentPortal({
               {visibleLabs.map(
                 ({ lab, work, submitted, graded, remaining }) => (
                   <article className="student-lab" key={lab.id}>
+                    <span className="student-lab-number" aria-hidden="true">{String(labs.indexOf(lab) + 1).padStart(2, "0")}</span>
                     <div className="student-lab-info">
                       <span className="student-kicker student-lab-kicker">
-                        <BookOpen size={16} />
                         Lab {String(labs.indexOf(lab) + 1).padStart(2, "0")}
+                        <span className={`student-lab-state${remaining ? "" : " is-complete"}`}>
+                          {remaining ? `${remaining} to submit` : "All submitted"}
+                        </span>
                       </span>
                       <h3>
                         <button onClick={() => setSelectedLab(lab.id)}>
@@ -671,16 +649,19 @@ export default function StudentPortal({
             </section>
           )}
           {state.demo && <p className="student-demo-note">Demo workspace <span>·</span> Sample coursework</p>}
-          <a
-            className="quordix-mobile-credit student-mobile-credit"
-            href="https://quordix.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Built by Quordix (opens in a new tab)"
-          >
-            <span>Built by</span>
-            <QuordixLogo />
-          </a>
+          <footer className="student-footer">
+            <span>LabTrack <span>·</span> Student workspace</span>
+            <a
+              className="quordix-mobile-credit student-credit"
+              href="https://quordix.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Built by Quordix (opens in a new tab)"
+            >
+              <span>Built by</span>
+              <QuordixLogo />
+            </a>
+          </footer>
         </main>
       </div>
     </div>
