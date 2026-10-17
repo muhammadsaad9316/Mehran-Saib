@@ -25,6 +25,10 @@ The frontend is a React 19 TypeScript SPA built by Vite 7 with Tailwind CSS 4 an
 
 Teacher/student portals load through `React.lazy` only when their role is rendered. Suspense uses the existing loading style; the root boundary offers reload if a module cannot load. Login does not download either portal. The unused chart and Recharts dependency were removed.
 
+The login screen alone shows a **Need help logging in?** WhatsApp link below the form. It opens a new tab to chat with +49 163 0278010, with a login-help message prefilled for the user to send.
+
+The button uses the unmodified white digital glyph from [Meta’s official WhatsApp logo pack](https://www.meta.com/brand/resources/whatsapp/whatsapp-brand/), stored locally as `public/whatsapp-logo-white.svg` (archive file `Digital_Glyph_White_RGB_2026.svg`).
+
 Teachers can open **Students**, select a roll number, enter the student's **Full name** in the profile, and choose **Save name**. Only the name changes; login details, roll numbers and saved work stay intact. Conflicting name edits return a visible error and require a refresh.
 
 When the signed-in user has `mustChangePassword=true`, `PasswordSetup.tsx` replaces the workspace with a focused personal-password form. Students enter a password of at least six characters twice; mismatches stay on the form. Both entries are visible by default with a Hide/Show passwords toggle. Successful saves update the user before refreshing state, so a failed refresh does not prompt another password change. Server gates enforce the restriction independently of the UI. See [student logins](student-logins.md).

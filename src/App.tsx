@@ -601,6 +601,17 @@ function Login({
           </div>
         )}
       </form>
+      <a
+        className="login-whatsapp-help"
+        href={`https://wa.me/491630278010?text=${encodeURIComponent("Hi, I’m having trouble logging in to LabTrack. Can you help?")}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Need help logging in? Message us on WhatsApp (opens in a new tab)"
+      >
+        <img src="/whatsapp-logo-white.svg" width={28} height={28} alt="" aria-hidden="true" />
+        <span>Need help logging in?<small>Message us on WhatsApp.</small></span>
+        <ArrowUpRight size={16} aria-hidden="true" />
+      </a>
       <div className="login-access-note"><LockKey size={14} aria-hidden="true" /><span>Your class. Your work. One place.</span></div>
       <a
         className="quordix-mobile-credit login-mobile-credit auth-quordix-credit"

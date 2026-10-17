@@ -249,6 +249,12 @@
 .demo-login .btn > span { flex: 1; text-align: left; }
 .demo-login .btn small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
 .demo-login .btn > svg { flex-shrink: 0; color: var(--workspace-muted); width: 18px; height: 18px; }
+.login-whatsapp-help { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 420px; min-height: 64px; padding: 14px 16px; box-sizing: border-box; flex-shrink: 0; border: 1px solid #12833e; border-radius: 9px; background: #12833e; color: #ffffff; box-shadow: 0 4px 12px rgb(18 131 62 / 16%); text-decoration: none; font-size: 14px; font-weight: 700; }
+.login-whatsapp-help > svg, .login-whatsapp-help > img { flex-shrink: 0; }
+.login-whatsapp-help > span { flex: 1; }
+.login-whatsapp-help small { display: block; margin-top: 3px; color: #ffffff; font-size: 12px; font-weight: 400; }
+.login-whatsapp-help:hover { background: #0d6c32; border-color: #0d6c32; }
+.login-whatsapp-help:focus-visible { outline: 2px solid #12833e; outline-offset: 3px; }
 .login-access-note { display: flex; align-items: center; gap: 8px; color: var(--workspace-muted); font-size: 11.5px; flex-shrink: 0; }
 .quordix-mobile-credit { display: none; }
 .auth-quordix-credit { display: flex; align-items: center; justify-content: center; gap: 7px; width: fit-content; min-height: 44px; margin-inline: auto; color: var(--workspace-muted); font-size: 11px; font-weight: 600; text-decoration: none; flex-shrink: 0; }
