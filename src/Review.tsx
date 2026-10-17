@@ -646,7 +646,7 @@ export default function Review({
                             <WarningCircle size={20} className="amber" />
                           )}
                           <div>
-                            <strong>{r.label}</strong>
+                            <strong>{r.label}{r.needsReview ? " · Needs review" : !r.passed ? " · Not met" : ""}</strong>
                             <p>{r.detail}</p>
                           </div>
                         </div>
@@ -781,14 +781,14 @@ export default function Review({
                         <div className="review-checklist-block">
                           <div className="review-section-subtitle">Requirements checklist</div>
                           <div className="review-sidebar-checklist" aria-label="Requirements checklist">
-                            {analysis.requirements.map((r) => (
+                            {[...analysis.requirements].sort((a,b) => Number(a.passed)-Number(b.passed)).map((r) => (
                               <div key={r.id} className={`review-sidebar-req ${r.passed ? "passed" : "failed"}`} title={r.detail}>
                                 {r.passed ? (
                                   <CheckCircle size={15} weight="fill" className="green" aria-hidden="true" />
                                 ) : (
                                   <WarningCircle size={15} weight="fill" className="amber" aria-hidden="true" />
                                 )}
-                                <span className="req-label">{r.label}</span>
+                                <span className="req-label"><span>{r.label}</span>{!r.passed && <small><strong>{r.needsReview ? "Needs review" : "Not met"}</strong> · {r.detail}</small>}</span>
                               </div>
                             ))}
                           </div>

@@ -16,6 +16,9 @@ Use isolated data for development checks. Real classroom credentials, uploaded w
 | `npm run provision:class` | Provision the fixed hosted classroom; not a test command |
 | `npm run prepare:student-logins` | Prepare private temporary codes for rolls 1–41; no account changes |
 | `npm run apply:student-logins` | Owner-authorized atomic student password reset and mandatory first setup; not a test command |
+| `node --import tsx server/lab-three.ts check` | Read-only lab inventory and consistency check for the configured classroom |
+| `node --import tsx server/lab-three.ts apply` | Explicitly append the approved Lab 3 draft with its original document; never reset or replace existing records |
+| `node --import tsx server/lab-three.ts upgrade-checks` | After deploying the semantic checker, upgrade only the existing Lab 3 checklists/revision; retain its publication, deadline, tasks, maxima, work and grades |
 
 Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm run backup:verify -- <encrypted-file>` and `npm run backup:restore -- <encrypted-file> <new-directory>`. There is no npm lint or database-reset script. The backend is executed as TypeScript with `tsx`; keep runtime dependencies installed when deploying a persistent server.
 
@@ -33,6 +36,8 @@ Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm 
 | `server/instructions.test.ts` | DOCX/PDF/text extraction and candidate-rule/document bounds |
 | `server/marks-sheet.test.ts` | Roll migration/order, complete totals, zero/blank/fractional marks and words |
 | `server/class-setup.test.ts` | Isolated provisioning, hashed accounts, work retention and refusal to reset passwords |
+| `server/lab-three.test.ts` | Lab 3 append-only behavior, repeat/conflict protection, original attachment integrity, advisory checks and draft privacy |
+| `server/lab-three-analysis.test.ts` | Each semantic check's negative case, complete solutions, exact missing-item reporting, CSS cascade, valid alternatives, review states and same-page evidence |
 | `server/login-security.test.ts`, `server/serverless-login-limit.test.ts` | Parallel login limits, shared account aliases, cooldown timing, successful reset and unavailable limiter rejection |
 | `src/api.test.ts` | Read retries and no write replay |
 | `src/preview.test.ts` | Path resolution and CSP restrictions |

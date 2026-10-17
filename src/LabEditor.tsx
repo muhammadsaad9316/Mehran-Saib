@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Plus, Trash, X } from "@phosphor-icons/react";
 import type { Lab, Requirement, Task } from "../shared/types";
+import { labThreeChecks } from "../shared/lab-three-checks";
 
 interface LabEditorProps {
   lab?: Lab;
@@ -359,6 +360,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
                           onChange={(event) =>
                             updateRequirement(task.id, rule.id, {
                               type: event.target.value as Requirement["type"],
+                              ...(event.target.value === "lab3" ? { value: labThreeChecks[0][2] } : {}),
                             })
                           }
                         >
@@ -366,17 +368,22 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
                           <option value="attribute">HTML attribute</option>
                           <option value="text">Page text</option>
                           <option value="file">Project file</option>
+                          <option value="lab3">Lab 3 requirement</option>
                         </select>
                       </label>
                     </div>
                     <div className="fields-2">
                       <label className="field">
-                        {rule.type === "file"
+                        {rule.type === "lab3" ? "Requirement to verify" : rule.type === "file"
                           ? "Required filename"
                           : rule.type === "text"
                             ? "Required text"
                             : "CSS selector"}
-                        <input
+                        {rule.type === "lab3" ? (
+                          <select value={rule.value} onChange={event => updateRequirement(task.id, rule.id, { value: event.target.value })}>
+                            {labThreeChecks.map(([, label, value]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                        ) : <input
                           required
                           maxLength={500}
                           value={rule.value}
@@ -392,7 +399,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
                                 ? "Welcome to Web Engineering"
                                 : "h1"
                           }
-                        />
+                        />}
                       </label>
                       {rule.type === "attribute" ? (
                         <label className="field">

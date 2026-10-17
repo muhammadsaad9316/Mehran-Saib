@@ -308,6 +308,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
                         <CheckCircle size={13} weight="fill" />
                       )}
                       {analysis.met}/{analysis.total} met
+                      {!!analysis.reviewCount && <small> · {analysis.reviewCount} need review</small>}
                     </span>
                   ) : (
                     <span className="task-req-none">No checks set</span>

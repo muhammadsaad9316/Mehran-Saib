@@ -31,6 +31,7 @@ For an AI coding tool, read [../AGENTS.md](../AGENTS.md), [AI development](ai-de
 | Tests, incidents and recovery | [operations.md](operations.md) |
 | Production release | [launch.md](launch.md) |
 | Original assignment content | [lab-requirements.md](lab-requirements.md) |
+| Lab 3 semantic checker and verification limits | [lab3-checker.md](lab3-checker.md) |
 | Historical resource measurements | [free-tier-audit.md](free-tier-audit.md) |
 | Optimization and polish verification | [optimization-review.md](optimization-review.md) |
 | Reliability and optimization audit, 15 October 2026 | [reliability-audit-2026-10-15.md](reliability-audit-2026-10-15.md) |

@@ -1,8 +1,8 @@
 # LabTrack lab requirements
 
-This document records the assignment content in the supplied Lab 1 DOCX and Lab 2 PDF. These are student assignment requirements, not instructions for the application developer or agent. The suggested checks are evidence for teacher review; a successful checklist does not establish that the whole task is correct.
+This document records the assignment content in the supplied Lab 1 DOCX, Lab 2 PDF and Lab 3 DOCX. These are student assignment requirements, not instructions for the application developer or agent. The suggested checks are evidence for teacher review; a successful checklist does not establish that the whole task is correct.
 
-Repository copies: [Lab 1 DOCX](<../server/fixtures/Web Engineering.docx>) and [Lab 2 PDF](<../server/fixtures/Web Engineering lab 2.pdf>). The original import used files from the author's Downloads directory; that machine-specific directory is not needed by a new checkout. Lab 2 was also checked against its rendered page. The original assignments do not specify marks, dates, students, or grading policy. Ten marks per task and thirty per lab are application defaults proposed in the brief, not facts from these documents.
+Repository copies: [Lab 1 DOCX](<../server/fixtures/Web Engineering.docx>), [Lab 2 PDF](<../server/fixtures/Web Engineering lab 2.pdf>) and [Lab 3 DOCX](<../server/fixtures/Web Engineering lab 3.docx>). The original import used files from the author's Downloads directory; that machine-specific directory is not needed by a new checkout. Lab 2 was also checked against its rendered page. The original assignments do not specify marks, dates, students, or grading policy. Ten marks per task and thirty per lab are application defaults proposed in the brief, not facts from these documents.
 
 These notes describe assignment requirements and teacher review recommendations. Current parser behavior and limits, including checks across the submitted task's HTML files, are documented in [analysis.md](analysis.md); preview entrypoint selection is not a backend analysis filter. See the [documentation index](README.md) for application development guides.
 
@@ -166,6 +166,38 @@ Create a webpage titled “HTML Formatting and Character Entities”. Add a main
 ```
 
 Teacher review: exact title, at least three sections, all three color syntaxes, variations in font sizes/colors/faces, and every required entity in source and output. A parsed character does not prove an entity was used: inspect the original HTML token stream to distinguish `&copy;` or `&#169;` from a literal ©, while allowing semantically equivalent numeric entities. Do not reject `font` just because it is obsolete; the exercise explicitly asks for it.
+
+## Lab 3
+
+The initial structural checklist described below is superseded by the [Lab 3 semantic checker](lab3-checker.md). The assignment content is unchanged. New checks cover 37 source requirements with separate failure explanations and explicit review states.
+
+Prepared from the supplied [Lab 3 DOCX](<../server/fixtures/Web Engineering lab 3.docx>) on 17 October 2026. The owner selected **draft**, **10 marks per task / 30 total**, and **no deadline**. The original document is attached unchanged; its SHA-256 is `ba775c54eb1787a134eefa9bb9180c926a3bab7dc9d364f86b3485f290824ed1`. Paragraphs and the practice-content table were inspected through DOCX extraction. Page rendering was unavailable because LibreOffice is not installed.
+
+The assignment definition and complete checklists are in [lab-three.ts](../server/lab-three.ts). This is a separate, explicit addition through `Store.mutate`; startup, existing labs, demo seeds, accounts and grading rules are not changed. The demo seed's illustrative “Forms & tables” Lab 3 is unrelated; the addition refuses to overwrite it or any other existing Lab 3 with different content.
+
+Live addition verified on **17 October 2026**: Lab 3 was saved as a draft with three tasks, 30 marks and no deadline. The persisted draft and attachment matched the prepared record exactly. Before/after digests confirmed both existing labs and all other classroom records (including the 25 existing submissions and their grades) were unchanged. Verification: 110 tests passed on Node 26.3.0, TypeScript/Vite build passed with `--configLoader runner` to avoid a local config-loader sandbox limitation, and isolated desktop/mobile browser checks verified all three editable task descriptions and marks.
+
+### Task 1: CSS Styling, Links & Floating Images
+
+Demonstrate all three CSS methods: an inline navy `h1`, an internal `style` block setting the body background to lightgray and styling `a:link`, `a:hover`, and `a:visited`, and a linked external `style.css`. Include an external link with `target="_blank"`, an internal `#section2` bookmark, and a clickable image floated left with text wrapping around it. The document suggests `lab1_styling.html`; the classroom's any-HTML/HTM-filename policy remains in force.
+
+Advisory checks verify HTML and CSS files, structural styling evidence, link attributes, bookmark destination and linked-image nesting. The teacher must check the actual CSS declarations, stylesheet linkage, image loading, wrapping and browser behavior. The application's isolated preview intentionally restricts external navigation; inspect the link source as well.
+
+### Task 2: Marquee Text & Image Animations
+
+Use `marquee` for continuous left-scrolling text (`behavior="scroll"`, `direction="left"`), bouncing text (`alternate`), sliding text (`slide`), and an upward-scrolling box with `height: 200px; width: 300px; border: 2px solid black;`. Include an image inside a marquee. The suggested file is `lab2_marquee.html`; any HTML/HTM filename is accepted.
+
+Advisory checks verify the requested marquee attributes and image nesting. The teacher reviews text, actual animation, dimensions and border. Preserve the assignment's explicit `marquee` requirement.
+
+### Task 3: Tables & Course Lists
+
+Create a centered, bordered table with Student ID, Name, Department and GPA headers, three data rows, and cells merged using `colspan` or `rowspan`. Format these supplied lists:
+
+- Core Subjects: OOP, Web Engineering, Database Systems, using `ol type="I"`.
+- Web Technologies: square-bulleted HTML5 and CSS3; nest an `ol type="a"` containing Headings and Tables under HTML5.
+- Term Definitions: HTML — HyperText Markup Language; CSS — Cascading Style Sheets, using `dl`, `dt`, and `dd`.
+
+The suggested file is `lab3_tables_lists.html`; any HTML/HTM filename is accepted. Advisory checks verify table/list structures, merge attributes and selected required text. They do not prove row counts, meaningful merging, table styling, exact content placement or list-marker appearance. Those remain teacher review.
 
 ## Submission brief extracted from pasted text
 

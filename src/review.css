@@ -80,7 +80,8 @@
 .teacher-review-modal .review-sidebar-req.passed { border-color: #bbf7d0; background: #f0fdf4; }
 .teacher-review-modal .review-sidebar-req.failed { border-color: #fed7aa; background: #fffbeb; }
 .teacher-review-modal .review-sidebar-req svg { flex-shrink: 0; margin-top: 1px; }
-.teacher-review-modal .review-sidebar-req .req-label { flex: 1; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.teacher-review-modal .review-sidebar-req .req-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.teacher-review-modal .review-sidebar-req .req-label small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--teacher-muted); }
 
 .teacher-review-modal .review-sidebar-quality-block { display: flex; flex-direction: column; }
 .teacher-review-modal .review-sidebar-quality-list { display: flex; flex-direction: column; gap: 4px; }
@@ -172,6 +173,12 @@
 @media (max-width: 600px) {
   .review-modal .review-tabs { flex-wrap: wrap; }
   .review-modal .review-entry-selector { flex: 1 1 100%; max-width: 100%; margin: 0 0 6px; }
+}
+@media (max-width: 1023px) {
+  .teacher-review-modal .review-sidebar { height: auto; overflow: visible; }
+  .teacher-review-modal .review-analysis-card { flex: none; }
+  .teacher-review-modal .review-analysis-scroll { flex: none; overflow: visible; }
+  .teacher-review-modal .review-sidebar-checklist { max-height: none; overflow: visible; }
 }
 @media (min-width: 1280px) {
   .teacher-minimal .teacher-review-modal .modal-head { display: flex; align-items: center; }

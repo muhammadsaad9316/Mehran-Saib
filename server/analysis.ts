@@ -2,6 +2,8 @@ import { posix } from "node:path";
 import { parse, tokenizer, type Node } from "acorn";
 import { load, type CheerioAPI } from "cheerio";
 import * as css from "css-tree";
+import { createLabThreeChecker } from "./lab-three-analysis.js";
+import { labThreeChecks } from "../shared/lab-three-checks.js";
 import type {
   AnalysisResult,
   Requirement,
@@ -39,6 +41,7 @@ type ParsedSubmission = {
   documents: { path: string; $: CheerioAPI; text: string }[];
   quality: Quality[];
   fingerprintSummaries: Map<ParsedFile["kind"], FingerprintSummary>;
+  labThreeCheck?: ReturnType<typeof createLabThreeChecker>;
 };
 
 const normalizeText = (value: string) =>
@@ -59,6 +62,9 @@ const boilerplate = new Set([
 
 function excludedTags(task: Task) {
   const tags = new Set<string>();
+  const special = new Set(task.requirements.filter(r => r.type === "lab3").map(r => labThreeChecks.find(check => check[2] === r.value)?.[0].slice(0,4)));
+  for (const [group, names] of [["l3t1","h1 a img"],["l3t2","marquee img"],["l3t3","table tr th td ol ul li dl dt dd"]] as const)
+    if(special.has(group))for(const name of names.split(" "))tags.add(name);
   for (const requirement of task.requirements.filter(
     (r) => r.type === "tag" || r.type === "attribute",
   )) {
@@ -114,7 +120,9 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
   const prescribedText = /Web Engineering/i.test(task.description) && /H2O/i.test(task.description) && /third/i.test(task.description) && /fourth/i.test(task.description)
     ? ["Web Engineering is an essential course for computer science students because it teaches how modern web applications are built. Understanding HTML is the foundation of all web development. Currently, I am in third fourth semester of my degree program. During our lectures, we learned that water is written as H2O and math formulas use terms like x2."]
     : [];
-  const requiredText = [...task.requirements
+  const labThreeText = task.requirements.some(r => r.type === "lab3" && labThreeChecks.some(check => check[2] === r.value && check[0].startsWith("l3t3")))
+    ? ["Student ID","Name","Department","GPA","OOP","Web Engineering","Database Systems","HTML5","CSS3","Headings","Tables","HTML","CSS","HyperText Markup Language","Cascading Style Sheets"] : [];
+  const requiredText = [...labThreeText.map(normalizeText), ...task.requirements
     .filter((r) => r.type === "text")
     .map((r) => normalizeText(r.value)), ...prescribedText.map(normalizeText),
     ...[...task.description.matchAll(/[“"]([^”"\n]{12,8000})[”"]/g)].map((match) => normalizeText(match[1]))]
@@ -130,6 +138,7 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
     detail: string,
   ) => result.quality.push({ severity, title, detail });
   let characters = 0;
+  const inspectedFiles: Submission["files"] = [];
 
   function dependency(
     file: string,
@@ -394,6 +403,7 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
       break;
     }
     const path = cleanPath(file.path);
+    inspectedFiles.push(file);
     if (/\.m?js$/i.test(path)) javascript(file.content, path);
     else if (/\.css$/i.test(path)) stylesheet(file.content, path);
     else if (/\.html?$/i.test(path)) {
@@ -533,6 +543,8 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
       "No uploaded source to analyze",
       "External links are not fetched. Upload project files for requirement and code analysis.",
     );
+  if (task.requirements.some(rule => rule.type === "lab3"))
+    result.labThreeCheck = createLabThreeChecker({ ...submission, files: inspectedFiles }, result.documents, task.requirements.filter(rule => rule.type === "lab3").map(rule => rule.value));
   return result;
 }
 
@@ -544,6 +556,8 @@ function checkRequirement(
   let passed = false;
   let detail = "";
   let label = requirement.label;
+  if (requirement.type === "lab3") return { id: requirement.id, label,
+    ...(parsed.labThreeCheck?.(requirement.value) ?? { passed: false, detail: "Lab 3 analysis is unavailable." }) };
   try {
     if (requirement.type === "file") {
       const expected = cleanPath(requirement.value).toLowerCase();
@@ -682,7 +696,8 @@ export function analyzeTaskSubmissions(submissions: Submission[], task: Task): T
     taskId: task.id,
     submissions: analyzed.map(({ submission, parsed }) => {
       const requirements = task.requirements.map((rule) => checkRequirement(rule, parsed, submission));
-      return { submissionId: submission.id, revision: submission.revision, met: requirements.filter((rule) => rule.passed).length, total: requirements.length, qualityCount: parsed.quality.length, comparable: complete(parsed) && parsed.files.some((file) => [...file.shingles.keys()].some((key) => !key.startsWith("short:"))) };
+      return { submissionId: submission.id, revision: submission.revision, met: requirements.filter((rule) => rule.passed).length, total: requirements.length, qualityCount: parsed.quality.length, comparable: complete(parsed) && parsed.files.some((file) => [...file.shingles.keys()].some((key) => !key.startsWith("short:"))),
+        ...(requirements.some(rule => rule.needsReview) ? { reviewCount: requirements.filter(rule => rule.needsReview).length } : {}) };
     }),
     pairs: pairs.sort((a, b) => b.percentage - a.percentage), notices,
   };

@@ -38,8 +38,11 @@ Both individual review and pair comparison validate navigation messages against 
 | `attribute` | Selector matches a source element whose named attribute is nonempty |
 | `text` | Case/whitespace-normalized text appears in parsed page content, including title and excluding comments/scripts/styles; blocks and line breaks separate words, while inline formatting preserves joined words |
 | `file` | HTML requirements accept any uploaded source `.html` or `.htm` filename, including older named rules such as `index.html`. Other files use case-insensitive path or basename matching with `*` wildcards across source and asset metadata |
+| `lab3` | A named, server-validated Lab 3 semantic check. Verifies required CSS values, source/link relationships, meaningful content, table structure or list placement. See [Lab 3 checker](lab3-checker.md). |
 
 Checks examine the HTML documents in the submitted task project within scan limits; selecting a preview entrypoint does **not** restrict backend analysis to that page. The original [assignment notes](lab-requirements.md) describe teacher review of the intended task entrypoint; do not mistake that recommendation for an implemented entrypoint parameter.
+
+The named Lab 3 checks use one HTML document consistently: the analyzed page satisfying the most configured checks. Every result identifies that page. A bookmark target on another page cannot satisfy it, and unrelated tables or upward marquee boxes cannot combine their evidence. Missing/incorrect evidence has a specific explanation. Unresolved scripts, conditional layout, remote styles, imports or CSS variables produce `needsReview=true`, never a passing result. Counts include only passed checks; the batch response separately reports `reviewCount` when nonzero. The teacher sidebar displays failed/review explanations without requiring hover.
 
 The checks cannot prove correct layout, visible rendering, semantic relevance, exact placement/counts, entity spelling or student identity in a title. An attribute rule checks presence/nonempty value; constrain the selector to check an exact attribute value. Invalid selectors produce a failed rule with an edit message. Quality observations include syntax/dependency issues and other static checks; absence of observations is not proof of correctness.
 

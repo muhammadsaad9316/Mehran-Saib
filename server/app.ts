@@ -14,6 +14,7 @@ import type {
   User,
 } from "../shared/types.js";
 import { analyzeSubmission, analyzeTaskSubmissions } from "./analysis.js";
+import { isLabThreeCheck } from "../shared/lab-three-checks.js";
 import { evidenceVersion } from "../shared/evidence.js";
 import { logFailure } from "./diagnostics.js";
 import { stableJson } from "./serialization.js";
@@ -226,8 +227,10 @@ function validateLab(body: unknown, old?: Lab): Lab {
         if (!item || typeof item !== "object" || Array.isArray(item))
           throw new HttpError(400, "Invalid requirement.");
         const rule = item as Record<string, unknown>;
-        if (!["tag", "attribute", "text", "file"].includes(String(rule.type)))
+        if (!["tag", "attribute", "text", "file", "lab3"].includes(String(rule.type)))
           throw new HttpError(400, "Unknown requirement type.");
+        if (rule.type === "lab3" && !isLabThreeCheck(rule.value))
+          throw new HttpError(400, "Unknown Lab 3 check. Select a supported requirement.");
         const ruleId =
           typeof rule.id === "string" && rule.id
             ? text(rule.id, "Requirement ID", 100)

@@ -12,7 +12,7 @@ export interface User {
 export interface Requirement {
   id: string;
   label: string;
-  type: "tag" | "attribute" | "text" | "file";
+  type: "tag" | "attribute" | "text" | "file" | "lab3";
   value: string;
   attribute?: string;
 }
@@ -82,6 +82,7 @@ export interface AnalysisResult {
     label: string;
     passed: boolean;
     detail: string;
+    needsReview?: boolean;
   }[];
   met: number;
   total: number;
@@ -101,7 +102,7 @@ export interface AnalysisResult {
 export interface TaskAnalysis {
   evidenceVersion?: string;
   taskId: string;
-  submissions: { submissionId: string; revision: number; met: number; total: number; qualityCount: number; comparable: boolean }[];
+  submissions: { submissionId: string; revision: number; met: number; total: number; qualityCount: number; comparable: boolean; reviewCount?: number }[];
   pairs: { leftId: string; rightId: string; percentage: number; sourceCoverage: number; peerCoverage: number; comparable: boolean }[];
   notices: string[];
 }

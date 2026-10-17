@@ -104,6 +104,8 @@ Optional `instructionFile` is `{ name, content, contentType }`; `content` is raw
 | Attribute name | 1–100 for `attribute` rules |
 | Instruction filename | Up to 160, no path/control characters |
 
+Requirements also accept `type: "lab3"` with a named check value from [shared/lab-three-checks.ts](../shared/lab-three-checks.ts). Unsupported values return 400; these are a finite set of checks, not executable expressions. Existing `tag`, `attribute`, `text` and `file` rules keep their behavior. Individual analysis requirements may include `needsReview: true`; such results have `passed: false` and an explanation. Batch submission entries include `reviewCount` when needed.
+
 ## Upload a task
 
 Browser example using the existing request helper:
