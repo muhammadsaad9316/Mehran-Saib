@@ -16,6 +16,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `POST /api/auth/demo` | Loopback demo only | `{ role: "teacher" \| "student" }` | 200 `User` + cookie; production 403 |
 | `POST /api/auth/logout` | Persistent server accepts without session; Vercel requires shaped cookie | No body required | 200 `{ "ok": true }`, session removed/cookie cleared |
 | `POST /api/students` | Teacher | `{ name, email, rollNumber, password }` | 201 `User` |
+| `PATCH /api/students/:id` | Teacher | `{ name, previousName }`; name is nonblank, at most 100 characters | 200 `User`; 409 if the saved name changed |
 | `POST /api/labs` | Teacher | Full editable lab body | 201 `Lab` |
 | `PATCH /api/labs/:id` | Teacher | Partial lab fields; `tasks` replaces the array | 200 `Lab` |
 | `POST /api/instructions/analyze` | Teacher | `{ instructionFile: { name, content, contentType } }` | 200 `{ tasks, notice, text }` draft; not persisted |
@@ -29,7 +30,7 @@ JSON requests use `Content-Type: application/json`; uploads use multipart. Authe
 | `GET /api/reports.xlsx?labId=...` | Teacher | Optional lab ID; first lab by default | 200 styled Excel workbook attachment |
 | `GET /api/reports/print?labId=...` | Teacher | Repeat `labId` to include multiple labs; no IDs or `select=1` opens the lab picker | 200 selection page or printable HTML |
 
-There are no delete, registration, forgotten-password recovery, student-update or separate lab/submission-list endpoints. First-login password creation is restricted to signed-in pending accounts. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
+Teachers can update only a student's name through the student-update route; account IDs, rolls, login details and work remain unchanged. There are no delete, registration, forgotten-password recovery or separate lab/submission-list endpoints. First-login password creation is restricted to signed-in pending accounts. Lists come from `/state`. Unknown `/api` paths normally return 404; unsigned Vercel protected requests can be rejected with 401 before Express routing.
 
 ## State visibility
 

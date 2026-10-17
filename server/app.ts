@@ -743,6 +743,21 @@ export async function createApp(options: AppOptions = {}) {
     });
     res.status(201).json(publicUser(user));
   });
+  app.patch("/api/students/:id", async (req, res) => {
+    actor(res, "teacher");
+    const name = text(req.body?.name, "Student name", 100);
+    if (typeof req.body?.previousName !== "string")
+      throw new HttpError(400, "The current student name is required. Refresh before saving.");
+    const updated = await store.mutate((data) => {
+      const student = data.users.find((item) => item.id === req.params.id && item.role === "student");
+      if (!student) throw new HttpError(404, "Student not found.");
+      if (student.name !== req.body.previousName)
+        throw new HttpError(409, "This student's name changed. Refresh before saving.");
+      student.name = name;
+      return publicUser(student);
+    });
+    res.json(updated);
+  });
   app.post("/api/labs", async (req, res) => {
     const user = actor(res, "teacher");
     const lab = validateLab(req.body);

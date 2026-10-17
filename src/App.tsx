@@ -370,6 +370,17 @@ export default function App() {
               </button>
             </div>
             <div className="modal-body">
+              <StudentNameForm
+                key={studentDetail.id}
+                student={studentDetail}
+                onSaved={async (updated) => {
+                  setStudentDetail((current) => current?.id === updated.id ? updated : current);
+                  setState((current) => current && ({ ...current, students: current.students.map((student) => student.id === updated.id ? updated : student) }));
+                  setToast("Student name saved.");
+                  try { await refresh(); }
+                  catch (cause) { setError(`The name was saved, but the workspace could not refresh. ${(cause as Error).message}`); }
+                }}
+              />
               {state.labs.map((lab) => (
                 <section className="student-history" key={lab.id}>
                   <div>
@@ -435,6 +446,35 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function StudentNameForm({ student, onSaved }: { student: User; onSaved: (student: User) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <form className="student-name-form" onSubmit={async (event) => {
+      event.preventDefault();
+      if (busy) return;
+      const name = new FormData(event.currentTarget).get("name");
+      setBusy(true);
+      setError("");
+      try {
+        const updated = await api<User>(`/students/${student.id}`, {
+          method: "PATCH", body: JSON.stringify({ name, previousName: student.name }),
+        });
+        await onSaved(updated);
+      } catch (cause) { setError((cause as Error).message); }
+      finally { setBusy(false); }
+    }}>
+      <label className="field">
+        Full name
+        <input name="name" required maxLength={100} autoComplete="name" disabled={busy}
+          defaultValue={student.name === `Roll ${student.rollNumber}` ? "" : student.name} />
+      </label>
+      {error && <p className="error" role="alert">{error}</p>}
+      <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save name"}</button>
+    </form>
   );
 }
 

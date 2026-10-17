@@ -131,6 +131,43 @@ after(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
+test("only teachers can rename students, with stale-name protection and no account or work changes", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "labtrack-name-test-"));
+  const nameApp = await createApp({ ...localDatabase, dataDir: directory, demo: true, production: false });
+  try {
+    const editor = request.agent(nameApp);
+    const learner = request.agent(nameApp);
+    await editor.post("/api/auth/demo").set("Host", "localhost").send({ role: "teacher" }).expect(200);
+    await learner.post("/api/auth/demo").set("Host", "localhost").send({ role: "student" }).expect(200);
+    const store = nameApp.locals.store;
+    const original = structuredClone(store.data);
+    const target = original.users.find((user: { rollNumber?: string }) => user.rollNumber === "1")!;
+    const route = `/api/students/${target.id}`;
+    const change = { name: "  Updated Student Name  ", previousName: target.name };
+    await request(nameApp).patch(route).send(change).expect(401);
+    await learner.patch(route).send(change).expect(403);
+    for (const name of ["", "   ", "a".repeat(101), 42, null])
+      await editor.patch(route).send({ ...change, name }).expect(400);
+    await editor.patch(route).send({ name: "Updated Student Name" }).expect(400);
+    await editor.patch(route).send({ ...change, previousName: "stale" }).expect(409);
+    await editor.patch("/api/students/missing").send(change).expect(404);
+    const teacherId = original.users.find((user: { role: string }) => user.role === "teacher")!.id;
+    await editor.patch(`/api/students/${teacherId}`).send(change).expect(404);
+    assert.deepEqual(store.data, original);
+    const response = await editor.patch(route).send({ ...change, role: "teacher", rollNumber: "41", email: "changed@example.test", password: "changed" }).expect(200);
+    assert.equal(response.body.name, "Updated Student Name");
+    assert.ok(!("passwordHash" in response.body) && !("authVersion" in response.body));
+    const expected = structuredClone(original);
+    expected.users.find((user: { id: string }) => user.id === target.id)!.name = "Updated Student Name";
+    assert.deepEqual(store.data, expected);
+    await editor.patch(route).send(change).expect(409);
+    assert.equal((await learner.get("/api/state").expect(200)).body.user.name, "Updated Student Name");
+  } finally {
+    await nameApp.locals.store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("instruction generation requires teacher access and returns reviewable draft checks", async () => {
   const instructionFile = {
     name: "brief.txt",

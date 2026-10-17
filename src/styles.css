@@ -2559,6 +2559,18 @@ tbody tr:hover {
 .student-detail-modal {
   width: 740px;
 }
+.student-name-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+.student-name-form .btn {
+  justify-self: start;
+  min-height: 44px;
+}
+.student-name-form input {
+  min-height: 44px;
+}
 .student-history {
   margin-bottom: 26px;
 }
