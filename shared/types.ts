@@ -73,6 +73,7 @@ export interface AppState {
   submissions: Submission[];
   activity: Activity[];
   demo: boolean;
+  publicDemo?: boolean;
 }
 
 export interface AnalysisResult {

@@ -34,6 +34,7 @@ import { marksSheetXlsx } from "./marks-sheet-xlsx.js";
 import { analyzeInstructions } from "./instructions.js";
 import { hashPassword, sessionToken, verifyPassword } from "./auth.js";
 import { demoDatabase, migrateDemoRoster } from "./seed.js";
+import { assertPublicDemoDatabase, publicDemoDatabase, publicDemoRequest } from "./public-demo.js";
 import {
   Store,
   type Database,
@@ -73,6 +74,7 @@ export interface AppOptions {
   dataDir?: string;
   mongoUri?: string;
   demo?: boolean;
+  publicDemo?: boolean;
   clientOrigin?: string;
   production?: boolean;
   adminEmail?: string;
@@ -314,15 +316,17 @@ function validateLab(body: unknown, old?: Lab): Lab {
 }
 
 export async function createApp(options: AppOptions = {}) {
+  const publicDemo = options.publicDemo === true;
   const production =
     options.production ?? process.env.NODE_ENV === "production";
   const demo =
-    options.demo ?? (!production && process.env.LABTRACK_DEMO !== "false");
+    publicDemo ? false : options.demo ?? (!production && process.env.LABTRACK_DEMO !== "false");
   if (production && demo)
     throw new Error("Demo access must be disabled in production.");
   const supabaseUrl = options.supabaseUrl ?? process.env.SUPABASE_URL;
   const supabaseKey = options.supabaseKey ?? process.env.SUPABASE_SECRET_KEY;
   const mongoUri = options.mongoUri ?? process.env.MONGODB_URI;
+  if (publicDemo && mongoUri) throw new Error("Public demo requires isolated Supabase tables or local JSON storage.");
   if (!production && supabaseUrl && !supabaseKey) {
     const setup = express();
     setup.disable("x-powered-by");
@@ -350,18 +354,29 @@ export async function createApp(options: AppOptions = {}) {
     throw new Error(
       "Production requires a hosted database or an explicitly persistent LABTRACK_DATA_DIR.",
     );
+  const dataDir = options.dataDir || process.env.LABTRACK_DATA_DIR || path.join(rootDir, ".data");
   const store = new Store(
-    options.dataDir ||
-      process.env.LABTRACK_DATA_DIR ||
-      path.join(rootDir, ".data"),
+    publicDemo ? path.join(dataDir, "public-demo") : dataDir,
     mongoUri,
     supabaseUrl && supabaseKey
-      ? { url: supabaseUrl, secretKey: supabaseKey, cache: true, compact: true }
+      ? { url: supabaseUrl, secretKey: supabaseKey, cache: true, compact: true, publicDemo }
       : undefined,
     options.serverless ? 8 : 1,
   );
   // Bootstrap below can write; only the initial read is safe to retry.
   await store.open(!options.serverless);
+  if (publicDemo) {
+    try {
+      assertPublicDemoDatabase(store.data);
+      if (!store.data.users.length) {
+        const seed = await publicDemoDatabase();
+        await store.mutate(data => {
+          assertPublicDemoDatabase(data);
+          if (!data.users.length) Object.assign(data, seed);
+        });
+      }
+    } catch (error) { await store.close(); throw error; }
+  }
   if (
     production &&
     store.data.users.some(
@@ -450,6 +465,11 @@ export async function createApp(options: AppOptions = {}) {
   app.disable("x-powered-by");
   app.locals.store = store;
   app.locals.demo = demo;
+  let publicApp: Promise<ReturnType<typeof express>> | undefined;
+  app.locals.close = async () => {
+    try { if (publicApp) await (await publicApp).locals.close(); }
+    finally { await store.close(); }
+  };
   if (options.serverless) {
     // Chunk JSON responses so a class roster with project files can be streamed.
     app.use((_req, res, next) => {
@@ -475,11 +495,16 @@ export async function createApp(options: AppOptions = {}) {
     next();
   });
   app.use(express.json({ limit: "8mb" }));
+  if (!publicDemo && (options.sessionCookieName ?? COOKIE_NAME) === COOKIE_NAME) app.use((req, res, next) => {
+    if (!publicDemoRequest(req)) return next();
+    publicApp ??= createApp({ ...options, publicDemo: true, demo: false }).catch(error => { publicApp = undefined; throw error; });
+    void publicApp.then(instance => instance(req, res, next)).catch(next);
+  });
   app.use(cookieParser());
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
   app.use("/api", async (req, res, next) => {
     const currentToken = req.cookies[options.sessionCookieName ?? COOKIE_NAME];
-    if (!options.serverless && ((typeof currentToken === "string" && /^(?:setup_)?[a-f0-9]{64}$/.test(currentToken)) || req.path === "/auth/login")) await store.refresh();
+    if (!options.serverless && ((typeof currentToken === "string" && /^(?:setup_|demo_)?[a-f0-9]{64}$/.test(currentToken)) || req.path === "/auth/login")) await store.refresh();
     else await store.ensureFresh();
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.get("origin");
@@ -545,7 +570,7 @@ export async function createApp(options: AppOptions = {}) {
     maxAge: SESSION_DURATION,
   };
   async function signIn(user: StoredUser, res: Response) {
-    const token = (user.mustChangePassword ? "setup_" : "") + sessionToken();
+    const token = (publicDemo ? "demo_" : user.mustChangePassword ? "setup_" : "") + sessionToken();
     const duration = user.mustChangePassword ? PASSWORD_SETUP_DURATION : SESSION_DURATION;
     await store.mutate((data) => {
       const current = data.users.find(item => item.id === user.id);
@@ -586,6 +611,7 @@ export async function createApp(options: AppOptions = {}) {
     const state: AppState = {
       user: user ? publicUser(user) : null,
       demo,
+      ...(publicDemo ? { publicDemo: true } : {}),
       students: user
         ? store.data.users
             .filter(
@@ -657,6 +683,7 @@ export async function createApp(options: AppOptions = {}) {
     await signIn(user, res);
   });
   app.post("/api/auth/password", async (req, res) => {
+    if (publicDemo) throw new HttpError(403, "Public demo passwords are fixed and cannot be changed.");
     const user = actor(res, "student");
     if (!user.mustChangePassword) throw new HttpError(400, "Your personal password is already set.");
     const password = passwordValue(req.body?.newPassword, 6);
@@ -711,6 +738,7 @@ export async function createApp(options: AppOptions = {}) {
 
   app.post("/api/students", async (req, res) => {
     actor(res, "teacher");
+    if (publicDemo) throw new HttpError(403, "Public demo accounts are fixed. Explore labs, uploads and grading instead.");
     const name = text(req.body?.name, "Student name", 100);
     const email = text(req.body?.email, "Email", 254).toLowerCase();
     const rollNumber = canonicalRollNumber(req.body?.rollNumber);
@@ -748,6 +776,7 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.patch("/api/students/:id", async (req, res) => {
     actor(res, "teacher");
+    if (publicDemo) throw new HttpError(403, "Public demo accounts cannot be changed.");
     const name = text(req.body?.name, "Student name", 100);
     if (typeof req.body?.previousName !== "string")
       throw new HttpError(400, "The current student name is required. Refresh before saving.");
@@ -776,6 +805,8 @@ export async function createApp(options: AppOptions = {}) {
         return existing;
       }
       data.labs.push(lab);
+      if (publicDemo && (data.labs.length > 3 || data.labs.reduce((sum, item) => sum + item.tasks.length, 0) > 8))
+        throw new HttpError(400, "The public demo supports up to 3 labs and 8 tasks. Try an existing task instead.");
       addActivity(
         data,
         "lab",
@@ -807,6 +838,8 @@ export async function createApp(options: AppOptions = {}) {
       throw new HttpError(400, "A valid lab revision is required.");
     const lab = validateLab({ ...old, ...req.body }, old);
     await store.mutate((data) => {
+      if (publicDemo && data.labs.filter(item => item.id !== old.id).reduce((sum, item) => sum + item.tasks.length, lab.tasks.length) > 8)
+        throw new HttpError(400, "The public demo supports up to 8 tasks.");
       if ((data.labs.find((item) => item.id === old.id)?.revision || 0) !== expectedRevision ||
           JSON.stringify(data.labs.find((item) => item.id === old.id)) !== JSON.stringify(old))
         throw new HttpError(409, "This lab changed. Refresh before saving again.");

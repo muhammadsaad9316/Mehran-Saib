@@ -2,6 +2,8 @@
 
 LabTrack separates React (`src/`), Express/domain services (`server/`) and public contracts (`shared/`). Supabase is private server persistence. There is no ORM or Supabase JavaScript SDK; `server/supabase.ts` uses Node `fetch` against REST RPC endpoints.
 
+The public showcase shares the website and Supabase project with the classroom, but uses an independent `labtrack_demo_*` persistence namespace. Requests authenticate against one store; teachers, students, projects, sessions and revision counters never cross stores. See [public demo](public-demo.md) for routing, fixed credentials and limits.
+
 ## Runtime modes
 
 ```mermaid

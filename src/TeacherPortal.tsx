@@ -270,9 +270,9 @@ export default function TeacherPortal({
               ) : (
                 <button
                   className="teacher-primary-button"
-                  disabled={students.length >= 41}
+                  disabled={state.publicDemo || students.length >= 41}
                   title={
-                    students.length >= 41
+                    state.publicDemo ? "Public demo accounts are fixed" : students.length >= 41
                       ? "All 41 roll numbers are assigned"
                       : undefined
                   }

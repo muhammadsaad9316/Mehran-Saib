@@ -6,6 +6,7 @@ export interface SupabaseConfig {
   secretKey: string;
   cache?: boolean;
   compact?: boolean;
+  publicDemo?: boolean;
 }
 export class SupabaseConflictError extends Error {}
 export class SupabaseStorageLimitError extends Error {}
@@ -70,7 +71,7 @@ export class SupabasePersistence {
         "Configure a server-only Supabase secret key, not a publishable or anonymous key.",
       );
     this.endpoint = `${url.origin}/rest/v1/rpc/`;
-    this.cacheKey = createHash("sha256").update(`${url.origin}|${config.secretKey}|${config.compact === true}`).digest("hex");
+    this.cacheKey = createHash("sha256").update(`${url.origin}|${config.secretKey}|${config.compact === true}|${config.publicDemo === true}`).digest("hex");
   }
 
   private isServiceRoleKey(key: string) {
@@ -87,7 +88,7 @@ export class SupabasePersistence {
   private async rpc(name: string, body: unknown, deadline?: AbortSignal): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.request(`${this.endpoint}${name}`, {
+      response = await this.request(`${this.endpoint}${this.config.publicDemo ? name.replace(/^labtrack_/, "labtrack_demo_") : name}`, {
         method: "POST",
         headers: {
           apikey: this.config.secretKey,
@@ -174,7 +175,7 @@ export class SupabasePersistence {
   async check(): Promise<void> {
     let response: Response;
     try {
-      response = await this.request(`${new URL(this.config.url).origin}/rest/v1/labtrack_meta?select=revision&id=eq.1`, {
+      response = await this.request(`${new URL(this.config.url).origin}/rest/v1/${this.config.publicDemo ? "labtrack_demo_meta" : "labtrack_meta"}?select=revision&id=eq.1`, {
         headers: { apikey: this.config.secretKey, ...(this.config.secretKey.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${this.config.secretKey}` }) },
         signal: AbortSignal.timeout(5000), redirect: "error",
       });

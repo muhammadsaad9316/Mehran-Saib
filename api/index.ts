@@ -3,6 +3,7 @@ import { createApp } from "../server/app.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { SupabasePersistence } from "../server/supabase.js";
 import { logFailure } from "../server/diagnostics.js";
+import { publicDemoRequest } from "../server/public-demo.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -38,7 +39,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     return;
   }
-  const session = /(?:^|;\s*)labtrack_session=((?:setup_)?[a-f0-9]{64})(?:;|$)/.test(req.headers.cookie || "");
+  const session = /(?:^|;\s*)labtrack_session=((?:setup_|demo_)?[a-f0-9]{64})(?:;|$)/.test(req.headers.cookie || "");
   if (read && pathname === "/api/state" && !session) {
     reply(200, { user: null, demo: false, students: [], labs: [], submissions: [], activity: [] });
     return;
@@ -54,7 +55,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   let app;
   try {
     // Each invocation owns its database snapshot, including on a warm instance.
-    app = await createApp({ production: true, demo: false, serverless: true });
+    app = await createApp({ production: true, demo: false, serverless: true, publicDemo: publicDemoRequest(req) });
     await new Promise<void>((resolve) => {
       res.once("finish", resolve);
       res.once("close", resolve);
@@ -66,6 +67,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       reply(503, { error: "The workspace is temporarily unavailable. Try again shortly.", requestId });
     } else res.end();
   } finally {
-    await app?.locals.store?.close();
+    await app?.locals.close?.();
   }
 }

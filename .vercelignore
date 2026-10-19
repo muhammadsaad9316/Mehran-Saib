@@ -4,6 +4,7 @@ dist
 data
 .production-smoke
 artifacts
+brag-output
 *.enc.json
 .env
 .env.*

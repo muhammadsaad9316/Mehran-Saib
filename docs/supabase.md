@@ -25,9 +25,11 @@ The existing project's public identifier is `akudfcgksdjlipxxwfdu`; its [dashboa
 
 Uploads consume **database** bytes, including base64 overhead. A zero Supabase Storage usage figure does not mean project uploads use no storage.
 
+The [public demo](public-demo.md) adds four independent `labtrack_demo_*` tables and nine matching private RPCs in this same project. They have their own users, payloads, revision and login budgets. Their migration creates no copies of classroom data and changes no existing classroom rows. Namespace-aware server routing and cache keys keep all authorized reads/writes within one workspace.
+
 ## Permissions
 
-All four tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. All nine RPCs are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
+Each namespace's four tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. Each namespace's nine RPCs are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
 
 Supabase secret keys resolve to an elevated server role that bypasses RLS. Express's session, role and ownership checks therefore enforce classroom authorization. Never fix an API error by disabling RLS, granting browser access or adding `SECURITY DEFINER`. See [API key guidance](https://supabase.com/docs/guides/getting-started/api-keys) and [RLS documentation](https://supabase.com/docs/guides/database/postgres/row-level-security). The informational [RLS Enabled No Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) notice fits this server-only design.
 
@@ -56,6 +58,8 @@ The latest storage guard checks `pg_database_size(current_database()) + positive
 `Store` owns its loaded revision through `SupabasePersistence`. Persistent Node checks revisions before protected requests/login, uses one write attempt and reloads/returns 409 on relevant conflicts. Vercel creates a store per request and reruns mutation validation against fresh records for up to eight write attempts with increasing jitter and a shared 45-second deadline. Lost transport acknowledgements trigger bounded read-only reconciliation rather than write replay. A confirmed write followed by failed refresh is acknowledged, with future access blocked until an authoritative reload succeeds.
 
 A process-local cache stores at most one private metadata snapshot capped at 16 MiB and separated by project/credential hash. Every load checks the database revision; unchanged reads return only metadata. Clones isolate requests. A failed connection never authorizes a stale cached snapshot. There is no browser cache or realtime stream of this state.
+
+The cache key also includes the demo namespace, so equal revision numbers cannot mix classroom and demo snapshots.
 
 Manual database edits must go through an equivalent versioned transaction that advances metadata; changing only `labtrack_records` can evade cache invalidation. Persistent Supabase observes versioned external changes on its next protected request; JSON/MongoDB still need a restart. Use controlled maintenance and a backup before direct data repairs.
 

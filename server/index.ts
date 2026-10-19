@@ -15,7 +15,7 @@ export async function startServer() {
   );
   async function shutdown() {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await app.locals.store?.close();
+    await app.locals.close();
     process.exit(0);
   }
   process.once("SIGINT", shutdown);

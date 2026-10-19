@@ -205,6 +205,17 @@ p {
 .app-shell {
   min-height: 100dvh;
 }
+.public-demo-notice {
+  position: relative;
+  z-index: 41;
+  padding: 10px 20px;
+  background: #eaf3ed;
+  color: #264b35;
+  border-bottom: 1px solid #cbded0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
 .sidebar {
   visibility: hidden;
   position: fixed;

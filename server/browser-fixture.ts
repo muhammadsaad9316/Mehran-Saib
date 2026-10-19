@@ -24,7 +24,7 @@ const app = await createApp({ dataDir:directory,production:false,demo:false,supa
 const server = app.listen(3127,"127.0.0.1",()=>console.log("Isolated browser fixture ready on 3127"));
 async function close() {
   await new Promise<void>(resolve=>server.close(()=>resolve()));
-  await app.locals.store.close();
+  await app.locals.close();
   if(path.dirname(directory)===path.resolve(os.tmpdir())&&path.basename(directory).startsWith("labtrack-browser-"))await rm(directory,{recursive:true,force:true});
   process.exit(0);
 }

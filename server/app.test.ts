@@ -710,6 +710,9 @@ test("the analyzer demo uses its own sign-in cookie without replacing the classr
     const ownCookie = cookies[0].split(';')[0];
     const state = await request(isolated).get('/api/state').set('Cookie',`labtrack_session=classroom-session; ${ownCookie}`).expect(200);
     assert.equal(state.body.user.role,'teacher');
+    const publicCookie = await request(isolated).get('/api/state').set('Cookie',`labtrack_session=demo_${'a'.repeat(64)}; ${ownCookie}`).expect(200);
+    assert.equal(publicCookie.body.user.role,'teacher');
+    assert.equal(publicCookie.body.publicDemo,undefined);
     const logout = await request(isolated).post('/api/auth/logout').set('Cookie',ownCookie).expect(200);
     assert.ok((logout.headers['set-cookie'] as unknown as string[]).every(value => value.startsWith('labtrack_analysis_demo=')));
   } finally {

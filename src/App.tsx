@@ -21,6 +21,7 @@ import BrandLogo from "./BrandLogo";
 import QuordixLogo from "./QuordixLogo";
 import { allowNavigation } from "./navigation-guard";
 import PasswordSetup from "./PasswordSetup";
+import { isPublicDemoEmail } from "../shared/demo";
 const TeacherPortal = lazy(() => import("./TeacherPortal"));
 const StudentPortal = lazy(() => import("./StudentPortal"));
 const date = (
@@ -254,6 +255,7 @@ export default function App() {
     <div
       className={`app-shell teacher-minimal${teacher ? "" : " student-portal"}`}
     >
+      {state.publicDemo && <div className="public-demo-notice" role="note">Public demo · Shared sample workspace. Use sample files only. Accounts and passwords are fixed.</div>}
       <Suspense fallback={<main className="loading-screen" role="status"><BrandLogo /><p>Opening your workspace…</p></main>}>
       {teacher ? (
         <TeacherPortal
@@ -370,7 +372,7 @@ export default function App() {
               </button>
             </div>
             <div className="modal-body">
-              <StudentNameForm
+              {!state.publicDemo && <StudentNameForm
                 key={studentDetail.id}
                 student={studentDetail}
                 onSaved={async (updated) => {
@@ -380,7 +382,7 @@ export default function App() {
                   try { await refresh(); }
                   catch (cause) { setError(`The name was saved, but the workspace could not refresh. ${(cause as Error).message}`); }
                 }}
-              />
+              />}
               {state.labs.map((lab) => (
                 <section className="student-history" key={lab.id}>
                   <div>
@@ -495,6 +497,7 @@ function Login({
     try {
       await api(role ? "/auth/demo" : "/auth/login", {
         method: "POST",
+        headers: role ? undefined : { "X-Labtrack-Workspace": isPublicDemoEmail(email) ? "demo" : "classroom" },
         body: JSON.stringify(role ? { role } : { email, password }),
       });
       await onLogin();

@@ -4,6 +4,8 @@ All routes are implemented in [server/app.ts](../server/app.ts), with production
 
 JSON requests use `Content-Type: application/json`; uploads use multipart. Authentication is the `labtrack_session` cookie, not a bearer token or Supabase JWT. Keep browser calls same-origin. `CLIENT_ORIGIN` is an origin allowlist setting, not a CORS/cross-site-cookie implementation.
 
+Public demo logins use `X-Labtrack-Workspace: demo`; the login form sets this for the two [public demo identities](public-demo.md). Their `demo_` session-token prefix selects independent storage for all later routes. Signed-in demo state additionally includes `publicDemo: true`. Teachers only access records in their authenticated workspace. Demo password/profile changes and account creation return 403; normal classroom behavior is unchanged.
+
 ## Route inventory
 
 | Method and path | Access | Request | Success |
