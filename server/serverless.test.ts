@@ -15,7 +15,7 @@ test("concurrent first requests initialize one teacher after a database conflict
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
     const body = JSON.parse(String(options.body));
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-    if (url.endsWith("labtrack_read_compact")) {
+    if (url.endsWith("labtrack_read_workspace")) {
       if (remote.users.length === 0) initialReads++;
       return json({ revision, data: body.known_revision === revision ? null : remote });
     }
@@ -71,7 +71,7 @@ test("serverless requests retain sessions, read fresh data, upload and grade wit
     if (url.includes("/labtrack_meta?")) return Response.json([{ revision }]);
     const body = JSON.parse(String(options.body));
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-    if (url.endsWith("labtrack_read_compact"))
+    if (url.endsWith("labtrack_read_workspace"))
       return json({ revision, data: body.known_revision === revision ? null : remote });
     if (url.endsWith("labtrack_login_attempt")) {
       if (body.clear_attempts) { budgets.delete(body.attempt_key); return json(true); }

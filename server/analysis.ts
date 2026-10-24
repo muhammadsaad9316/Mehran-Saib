@@ -4,6 +4,7 @@ import { load, type CheerioAPI } from "cheerio";
 import * as css from "css-tree";
 import { createLabThreeChecker } from "./lab-three-analysis.js";
 import { labThreeChecks } from "../shared/lab-three-checks.js";
+import { ANALYSIS_MAX_FILES, ANALYSIS_MAX_SOURCE_BYTES, ANALYSIS_MAX_PROJECTS, ANALYSIS_MAX_TOTAL_BYTES, type AnalysisSubmission } from "./analysis-budget.js";
 import type {
   AnalysisResult,
   Requirement,
@@ -12,10 +13,13 @@ import type {
   TaskAnalysis,
 } from "../shared/types.js";
 
-const MAX_FILES = 40;
-const MAX_CHARACTERS = 200_000;
-const MAX_PEERS = 200;
-const MAX_PEER_CHARACTERS = 2_000_000;
+const MAX_FILES = ANALYSIS_MAX_FILES;
+const MAX_CHARACTERS = ANALYSIS_MAX_SOURCE_BYTES;
+const MAX_PEERS = ANALYSIS_MAX_PROJECTS;
+const MAX_PEER_CHARACTERS = ANALYSIS_MAX_TOTAL_BYTES;
+const MAX_SYNTAX_DEPTH = 128;
+const MAX_HTML_TAGS = 2_000;
+const MAX_JS_TOKENS = 20_000;
 const WINDOW = 9;
 type Quality = AnalysisResult["quality"][number];
 type Feature = {
@@ -59,6 +63,61 @@ const boilerplate = new Set([
   "script",
   "style",
 ]);
+const voidTags = new Set("area base br col embed hr img input link meta param source track wbr".split(" "));
+
+// Linear preflight: bound parser work even when a short document has extreme nesting.
+function htmlWithinBudget(source: string) {
+  let depth = 0, tags = 0;
+  for (let index = 0; index < source.length;) {
+    const start = source.indexOf("<", index);
+    if (start < 0) break;
+    if (source.startsWith("<!--", start)) {
+      const end = source.indexOf("-->", start + 4);
+      index = end < 0 ? source.length : end + 3;
+      continue;
+    }
+    if (!/^<\/?[a-z]/i.test(source.slice(start, start + 3))) { index = start + 1; continue; }
+    let end = start + 1, quote = "";
+    for (; end < source.length; end++) {
+      const character = source[end];
+      if (quote) { if (character === quote) quote = ""; }
+      else if (character === '"' || character === "'") quote = character;
+      else if (character === ">") break;
+    }
+    const tag = /^<(\/?)([a-z][a-z\d:-]*)/i.exec(source.slice(start, Math.min(end, start + 160)));
+    if (tag) {
+      if (++tags > MAX_HTML_TAGS) return false;
+      if (tag[1]) depth = Math.max(0, depth - 1);
+      else if (!voidTags.has(tag[2].toLowerCase())) depth++;
+      if (depth > MAX_SYNTAX_DEPTH) return false;
+    }
+    index = end + 1;
+  }
+  return true;
+}
+
+function cssWithinBudget(source: string) {
+  let depth = 0, tokens = 0, quote = "";
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    if (quote) {
+      if (character === "\\") index++;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") { quote = character; continue; }
+    if (source.startsWith("/*", index)) {
+      const end = source.indexOf("*/", index + 2);
+      index = end < 0 ? source.length : end + 1;
+      continue;
+    }
+    if ("({[".includes(character)) depth++;
+    else if (")}]".includes(character)) depth = Math.max(0, depth - 1);
+    if ("{}():;[]".includes(character)) tokens++;
+    if (depth > MAX_SYNTAX_DEPTH || tokens > MAX_JS_TOKENS) return false;
+  }
+  return true;
+}
 
 function excludedTags(task: Task) {
   const tags = new Set<string>();
@@ -109,7 +168,7 @@ function shingles(
   return result;
 }
 
-function inspect(submission: Submission, task: Task): ParsedSubmission {
+function inspect(submission: AnalysisSubmission, task: Task): ParsedSubmission {
   const result: ParsedSubmission = { files: [], documents: [], quality: [], fingerprintSummaries: new Map() };
   const paths = new Set(
     [...submission.files, ...(submission.assets ?? [])].map((f) =>
@@ -137,6 +196,8 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
     title: string,
     detail: string,
   ) => result.quality.push({ severity, title, detail });
+  if (submission.analysisSourceLimited)
+    issue("info", "Analysis limit reached", "Some source was omitted before loading to keep analysis within its file and byte budgets. Review the complete project manually.");
   let characters = 0;
   const inspectedFiles: Submission["files"] = [];
 
@@ -166,27 +227,26 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
 
   function javascript(source: string, path: string) {
     try {
+      // Tokenize before building a recursive AST; strings and comments are not nesting.
+      const features: Feature[] = [];
+      const tokens = tokenizer(source, { ecmaVersion: "latest" });
+      let depth = 0;
+      for (let token = tokens.getToken(); token.type.label !== "eof"; token = tokens.getToken()) {
+        const label = token.type.label;
+        if (["(", "[", "{", "${"].includes(label)) depth++;
+        else if ([")", "]", "}"].includes(label)) depth = Math.max(0, depth - 1);
+        if (depth > MAX_SYNTAX_DEPTH || features.length >= MAX_JS_TOKENS) {
+          issue("info", "Analysis limit reached", `${path} exceeds the JavaScript nesting or token budget. Review this file manually.`);
+          return;
+        }
+        const value = (token as typeof token & { value?: unknown }).value;
+        features.push({ value: label === "name" ? "identifier" : `${label}:${String(value ?? "")}`, start: token.start, end: token.end });
+      }
       let ast: Node;
       try {
         ast = parse(source, { ecmaVersion: "latest", sourceType: "module" });
       } catch {
         ast = parse(source, { ecmaVersion: "latest", sourceType: "script" });
-      }
-      const features: Feature[] = [];
-      const tokens = tokenizer(source, { ecmaVersion: "latest" });
-      for (
-        let token = tokens.getToken();
-        token.type.label !== "eof";
-        token = tokens.getToken()
-      ) {
-        const label = token.type.label;
-        const value = (token as typeof token & { value?: unknown }).value;
-        features.push({
-          value:
-            label === "name" ? "identifier" : `${label}:${String(value ?? "")}`,
-          start: token.start,
-          end: token.end,
-        });
       }
       let maximumNesting = 0;
       let advancedSyntax = false;
@@ -319,6 +379,10 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
   }
 
   function stylesheet(source: string, path: string) {
+    if (!cssWithinBudget(source)) {
+      issue("info", "Analysis limit reached", `${path} exceeds the CSS nesting or token budget. Review this file manually.`);
+      return;
+    }
     try {
       const features: Feature[] = [];
       let recovered = false;
@@ -393,12 +457,12 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
       `Only the first ${MAX_FILES} text files were analyzed.`,
     );
   for (const file of submission.files.slice(0, MAX_FILES)) {
-    characters += file.content.length;
+    characters += Buffer.byteLength(file.content);
     if (characters > MAX_CHARACTERS) {
       issue(
         "info",
         "Analysis limit reached",
-        `Analysis stopped at ${MAX_CHARACTERS.toLocaleString()} source characters.`,
+        `Analysis stopped at ${MAX_CHARACTERS.toLocaleString()} source bytes.`,
       );
       break;
     }
@@ -407,6 +471,10 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
     if (/\.m?js$/i.test(path)) javascript(file.content, path);
     else if (/\.css$/i.test(path)) stylesheet(file.content, path);
     else if (/\.html?$/i.test(path)) {
+      if (!htmlWithinBudget(file.content)) {
+        issue("info", "Analysis limit reached", `${path} exceeds the HTML nesting or tag budget. Review this file manually.`);
+        continue;
+      }
       const $ = load(file.content, { sourceCodeLocationInfo: true });
       const document = { path, $, text: "" };
       result.documents.push(document);
@@ -491,6 +559,8 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
         if (!requiredTags.has(tag))
           features.push({ value: `tag:${tag}:parent:${parentTag}`, context, start: location?.startOffset, end: location?.endOffset });
         for (const [attribute, value] of Object.entries(element.attribs)) {
+          if (attribute === "style" && !cssWithinBudget(value))
+            issue("info", "Analysis limit reached", `${path} contains an inline style beyond the CSS nesting or token budget. Review this file manually.`);
           if (
             task.requirements.some(
               (r) => r.type === "attribute" && r.attribute === attribute,
@@ -543,7 +613,8 @@ function inspect(submission: Submission, task: Task): ParsedSubmission {
       "No uploaded source to analyze",
       "External links are not fetched. Upload project files for requirement and code analysis.",
     );
-  if (task.requirements.some(rule => rule.type === "lab3"))
+  // The semantic checker parses linked/inline CSS again; never hand it omitted or over-budget input.
+  if (complete(result) && task.requirements.some(rule => rule.type === "lab3"))
     result.labThreeCheck = createLabThreeChecker({ ...submission, files: inspectedFiles }, result.documents, task.requirements.filter(rule => rule.type === "lab3").map(rule => rule.value));
   return result;
 }
@@ -639,6 +710,15 @@ function complete(parsed: ParsedSubmission) {
   return !parsed.quality.some((issue) => /syntax|Analysis limit/i.test(issue.title));
 }
 
+function requirementsFor(parsed: ParsedSubmission, submission: Submission, task: Task) {
+  return task.requirements.map(requirement => {
+    const result = checkRequirement(requirement, parsed, submission);
+    return !complete(parsed) && !result.passed && requirement.type !== "file"
+      ? { ...result, needsReview: true, detail: `${result.detail} Source analysis is incomplete; review this check manually.` }
+      : result;
+  });
+}
+
 function compare(parsed: ParsedSubmission, other: ParsedSubmission) {
   let overlap = 0;
   let ownTotal = 0;
@@ -669,13 +749,15 @@ function compare(parsed: ParsedSubmission, other: ParsedSubmission) {
   };
 }
 
-export function analyzeTaskSubmissions(submissions: Submission[], task: Task): TaskAnalysis {
+export function analyzeTaskSubmissions(submissions: AnalysisSubmission[], task: Task): TaskAnalysis {
   const selected = submissions.filter((submission) => submission.taskId === task.id);
   const analyzed: { submission: Submission; parsed: ParsedSubmission }[] = [];
   const notices: string[] = [];
+  const limitedSources = selected.filter(submission => submission.analysisSourceLimited).length;
+  if (limitedSources) notices.push(`Source loading was limited for ${limitedSources} project(s). Those projects need manual review and cannot trigger similarity flags.`);
   let characters = 0;
   for (const submission of selected.slice(0, MAX_PEERS)) {
-    characters += Math.min(MAX_CHARACTERS, submission.files.slice(0, MAX_FILES).reduce((sum, file) => sum + file.content.length, 0));
+    characters += Math.min(MAX_CHARACTERS, submission.files.slice(0, MAX_FILES).reduce((sum, file) => sum + Buffer.byteLength(file.content), 0));
     if (characters > MAX_PEER_CHARACTERS) break;
     analyzed.push({ submission, parsed: inspect(submission, task) });
   }
@@ -695,7 +777,7 @@ export function analyzeTaskSubmissions(submissions: Submission[], task: Task): T
   return {
     taskId: task.id,
     submissions: analyzed.map(({ submission, parsed }) => {
-      const requirements = task.requirements.map((rule) => checkRequirement(rule, parsed, submission));
+      const requirements = requirementsFor(parsed, submission, task);
       return { submissionId: submission.id, revision: submission.revision, met: requirements.filter((rule) => rule.passed).length, total: requirements.length, qualityCount: parsed.quality.length, comparable: complete(parsed) && parsed.files.some((file) => [...file.shingles.keys()].some((key) => !key.startsWith("short:"))),
         ...(requirements.some(rule => rule.needsReview) ? { reviewCount: requirements.filter(rule => rule.needsReview).length } : {}) };
     }),
@@ -704,14 +786,12 @@ export function analyzeTaskSubmissions(submissions: Submission[], task: Task): T
 }
 
 export function analyzeSubmission(
-  submission: Submission,
-  peers: Submission[],
+  submission: AnalysisSubmission,
+  peers: AnalysisSubmission[],
   task: Task,
 ): AnalysisResult {
   const parsed = inspect(submission, task);
-  const requirements = task.requirements.map((requirement) =>
-    checkRequirement(requirement, parsed, submission),
-  );
+  const requirements = requirementsFor(parsed, submission, task);
   const eligible = peers.filter(
     (peer) =>
       peer.id !== submission.id &&
@@ -719,6 +799,8 @@ export function analyzeSubmission(
       peer.labId === submission.labId &&
       peer.taskId === submission.taskId,
   );
+  const limitedPeers = eligible.filter(peer => peer.analysisSourceLimited).length;
+  if (limitedPeers) parsed.quality.push({ severity: "info", title: "Comparison limit reached", detail: `Source loading was limited for ${limitedPeers} peer project(s). Review those projects manually; they cannot trigger similarity flags.` });
   const similarities: AnalysisResult["similarities"] = [];
   let compared = 0;
   let peerCharacters = 0;
@@ -727,7 +809,7 @@ export function analyzeSubmission(
       MAX_CHARACTERS,
       peer.files
         .slice(0, MAX_FILES)
-        .reduce((sum, file) => sum + file.content.length, 0),
+        .reduce((sum, file) => sum + Buffer.byteLength(file.content), 0),
     );
     if (peerCharacters > MAX_PEER_CHARACTERS) break;
     compared++;
@@ -745,7 +827,7 @@ export function analyzeSubmission(
     parsed.quality.push({
       severity: "info",
       title: "Comparison limit reached",
-      detail: `${compared} of ${eligible.length} peer submissions were compared within the ${MAX_PEERS}-peer / ${MAX_PEER_CHARACTERS.toLocaleString()}-character analysis limit.`,
+      detail: `${compared} of ${eligible.length} peer submissions were compared within the ${MAX_PEERS}-peer / ${MAX_PEER_CHARACTERS.toLocaleString()}-byte analysis limit.`,
     });
   return {
     requirements,

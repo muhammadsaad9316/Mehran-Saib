@@ -77,6 +77,7 @@ function ComparisonPane({ submission: summary, task, state, onRefresh, view, mat
   const [marks, setMarks] = useState(String(submission.grade?.marks ?? ""));
   const [feedback, setFeedback] = useState(submission.grade?.feedback || "");
   const [publish, setPublish] = useState(submission.grade?.published ?? true);
+  const [expectedGradeAt, setExpectedGradeAt] = useState(submission.grade?.gradedAt || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(() => JSON.stringify([marks, feedback, publish]));
   const dirty = JSON.stringify([marks, feedback, publish]) !== saved;
@@ -101,7 +102,8 @@ function ComparisonPane({ submission: summary, task, state, onRefresh, view, mat
   async function save(event: React.FormEvent) {
     event.preventDefault(); setError(""); setNotice(""); setSaving(true);
     try {
-      await api(`/submissions/${submission.id}/grade`, { method: "PATCH", body: JSON.stringify({ marks: Number(marks), feedback, published: publish, revision: submission.revision, expectedGradeAt: submission.grade?.gradedAt || "" }) });
+      const savedSubmission = await api<Submission>(`/submissions/${submission.id}/grade`, { method: "PATCH", body: JSON.stringify({ marks: Number(marks), feedback, published: publish, revision: submission.revision, expectedGradeAt }) });
+      setExpectedGradeAt(savedSubmission.grade!.gradedAt);
       onGradeSaved();
       setSaved(JSON.stringify([marks, feedback, publish]));
       setNotice(publish ? "Grade published." : "Draft grade saved.");
@@ -111,6 +113,7 @@ function ComparisonPane({ submission: summary, task, state, onRefresh, view, mat
       setError(cause instanceof Error ? cause.message : "Could not save the grade.");
       if ((cause as { status?: number }).status === 409) {
         onStale();
+        setError("This submission or grade changed. Close and reopen the comparison to load the latest grade before saving again.");
         try { await onRefresh(); }
         catch (refreshCause) { setError(`The submission changed, and the latest revision could not load. ${refreshCause instanceof Error ? refreshCause.message : "Refresh the workspace before grading again."}`); }
       }

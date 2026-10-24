@@ -226,7 +226,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
             const topPct = topMatch ? topMatch.percentage : 0;
             const isHighRisk = topPct > 70;
             const isModerateRisk = topPct >= 50 && topPct <= 70;
-            const isCleanMatch = Boolean(submission && (!topMatch || topPct < 50));
+            const isCleanMatch = Boolean(analysis?.comparable && topMatch && topPct < 50);
 
             const matches = pairs.filter((pair) => pair.leftId === submission?.id || pair.rightId === submission?.id);
             const best = topMatch || matches[0];
@@ -348,7 +348,7 @@ export default function CheckTasks({ state, onReview, onRefresh }: { state: AppS
                     <CheckCircle size={13} weight="fill" /> Clean
                   </span>
                 ) : submission ? (
-                  loading ? "Checking…" : analysis?.comparable ? "Clean" : "Needs manual review"
+                  loading ? "Checking…" : !analysis ? "Unavailable" : "Needs manual review"
                 ) : (
                   "—"
                 )}

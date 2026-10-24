@@ -22,6 +22,8 @@ Use isolated data for development checks. Real classroom credentials, uploaded w
 
 Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm run backup:verify -- <encrypted-file>` and `npm run backup:restore -- <encrypted-file> <new-directory>`. There is no npm lint or database-reset script. The backend is executed as TypeScript with `tsx`; keep runtime dependencies installed when deploying a persistent server.
 
+Build before `npm run test:browser`: the fixture serves `dist/`. Playwright's global setup starts an isolated JSON classroom on port 3127 in the runner process and returns its teardown. Teardown closes active connections, the listener/store and its checked temporary directory, avoiding Windows child-process shutdown hangs. A failed fixture bind is an error; existing servers are never reused.
+
 ## Test map
 
 | Suite | Coverage |
@@ -34,6 +36,8 @@ Additional commands: `npm run test:browser`, `npm run backup -- [output]`, `npm 
 | `server/uploads.test.ts` | Paths, ZIP extraction, encoding, duplicates, count/size and asset separation |
 | `server/analysis.test.ts` | Requirements, exclusions, similarity, malformed code, group matches and scan completeness |
 | `server/instructions.test.ts` | DOCX/PDF/text extraction and candidate-rule/document bounds |
+| `server/lab-instructions.test.ts` | Metadata-only state, protected handout downloads, attachment-preserving edits, scoped SQL conflicts and private grants in both namespaces |
+| `e2e/audit-fixes.spec.ts`, `e2e/logout.spec.ts` | Draft grade conflicts, lab dismissal/save guards, deferred downloads, on-demand handouts, sign-out feedback and session-state clearing on desktop/mobile |
 | `server/marks-sheet.test.ts` | Roll migration/order, complete totals, zero/blank/fractional marks and words |
 | `server/class-setup.test.ts` | Isolated provisioning, hashed accounts, work retention and refusal to reset passwords |
 | `server/lab-three.test.ts` | Lab 3 append-only behavior, repeat/conflict protection, original attachment integrity, advisory checks and draft privacy |
@@ -83,7 +87,7 @@ Do not log full upload/RPC bodies while diagnosing a failure. Supabase snapshots
 
 ## Backup and recovery
 
-The encrypted backup/verify/restore commands now support JSON and Supabase. They export the full legacy read, exclude sessions, validate references/source/assets/grades and refuse overwriting existing outputs or restore directories. MongoDB still requires provider snapshots. The owner-approved GitHub schedule runs daily at 01:15 Pakistan time, retaining encrypted artifacts for 30 days; see [activation evidence](reliability-progress.md). The historical [free-tier audit](free-tier-audit.md) records a private `.data/backups/classroom-2026-10-13-before-optimization.json` recovery copy with sessions excluded; that ignored file is not guaranteed to exist in a clone and is not a complete database backup.
+The encrypted backup/verify/restore commands now support JSON and Supabase. They export the full legacy read, exclude sessions, validate references/source/assets/grades and refuse overwriting existing outputs or restore directories. Backup rejects incomplete or conflicting provider settings before reading a source or creating keys/output; it never falls back to JSON after partial Supabase configuration. Verify/restore do not require source-provider configuration. MongoDB still requires provider snapshots. The owner-approved GitHub schedule runs daily at 01:15 Pakistan time, retaining encrypted artifacts for 30 days; see [activation evidence](reliability-progress.md). The historical [free-tier audit](free-tier-audit.md) records a private `.data/backups/classroom-2026-10-13-before-optimization.json` recovery copy with sessions excluded; that ignored file is not guaranteed to exist in a clone and is not a complete database backup.
 
 Run `npm run backup` to create an ignored `.data/backups/*.enc.json`; verify with `npm run backup:verify -- <file>`. Restore into a new directory using `npm run backup:restore -- <file> <new-directory>`. The CLI retains a random `.data/backup-key` unless `LABTRACK_BACKUP_KEY` supplies the same 32-byte key as base64. Keep this key separately in protected owner custody; neither an encrypted artifact nor a CSV can restore data without it. For JSON, stop the writer cleanly before exporting. For Supabase/MongoDB, use an owner-approved provider/database backup process and verify what the plan includes. Preserve schema/migrations, users/password hashes, labs/attachments, submissions/asset bytes and ordering. Marks CSV is a report, not a restore source. Credential CSV contains plaintext passwords and needs separate restricted custody.
 
@@ -99,6 +103,6 @@ The app has no archived submission revisions or immutable event ledger to recons
 
 ## Resource monitoring
 
-Monitor provider database size, egress, logs, request duration and rate-limit failures. Cached reads reduce transfers only with warm-instance reuse; changed data still reloads the snapshot. Upload bytes/base64 live in Postgres. The 400,000,000-byte guard protects positive lab/submission content growth, not every consumer/provider limit. Metadata grading/publication and content reduction remain possible. Source/binary payloads are separate from routine metadata reads; instruction attachments remain in labs.
+Monitor provider database size, egress, logs, request duration and rate-limit failures. Cached reads reduce transfers only with warm-instance reuse; changed data still reloads the snapshot. Upload bytes/base64 live in Postgres. The 400,000,000-byte guard protects positive lab/submission content growth, not every consumer/provider limit. Metadata grading/publication and content reduction remain possible. Source/binary payloads are separate from routine metadata reads. Instruction attachments remain in private labs but `read_workspace` projects only their metadata; bytes load through `instructions` on demand.
 
 For growth beyond the fixed class, evaluate object storage, selective/paginated reads, task analysis cost and tenancy together. Historical measurements/free-plan notes in the audit are dated; verify current provider limits before relying on them.

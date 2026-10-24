@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   ArrowUpRight,
@@ -14,16 +14,18 @@ import {
 } from "@phosphor-icons/react";
 import type { AppState, Lab, Submission, User } from "../shared/types";
 import { api } from "./api";
-import Review from "./Review";
 import type { ReviewQueueMode } from "./review-queue";
-import LabEditor from "./LabEditor";
 import BrandLogo from "./BrandLogo";
 import QuordixLogo from "./QuordixLogo";
 import { allowNavigation } from "./navigation-guard";
 import PasswordSetup from "./PasswordSetup";
 import { isPublicDemoEmail } from "../shared/demo";
+import { deadlineRemaining, useDeadlineClock } from "./student-deadline";
+import { mergeProjectFiles, uploadSize } from "./upload-selection";
 const TeacherPortal = lazy(() => import("./TeacherPortal"));
 const StudentPortal = lazy(() => import("./StudentPortal"));
+const Review = lazy(() => import("./Review"));
+const LabEditor = lazy(() => import("./LabEditor"));
 const date = (
   value: string,
   options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" },
@@ -53,19 +55,22 @@ export default function App() {
   const [studentDetail, setStudentDetail] = useState<User | null>(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   const initialized = useRef(false);
   const labOperation = useRef("");
+  const sessionGeneration = useRef(0);
   function openReview(submission: Submission) {
     setReviewQueueMode(state?.submissions.some((item) =>
       item.labId === submission.labId && item.taskId === submission.taskId && !item.grade,
     ) ? "pending" : "all");
     setReview(submission);
   }
-  async function refresh() {
-    const next = await api<AppState>("/state");
-    setState(next);
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    const generation = sessionGeneration.current;
+    const next = await api<AppState>("/state", { signal });
+    if (!signal?.aborted && generation === sessionGeneration.current) setState(next);
     return next;
-  }
+  }, []);
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -108,12 +113,12 @@ export default function App() {
     background.forEach(({ el }) => {
       el.inert = true;
     });
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]');
     const focusable = 'button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),a[href],summary,iframe,[tabindex]:not([tabindex="-1"])';
-    const controls = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusable) || [])
+    const controls = () => Array.from(dialog()?.querySelectorAll<HTMLElement>(focusable) || [])
       .filter((el) => el.getClientRects().length && !el.closest("[hidden],[inert]"));
     if (!managedByEditor) {
-      const initialInput = dialog?.querySelector<HTMLInputElement>("input[data-initial-focus]");
+      const initialInput = dialog()?.querySelector<HTMLInputElement>("input[data-initial-focus]");
       (initialInput ?? controls()[0])?.focus({ preventScroll: true });
       initialInput?.select();
     }
@@ -186,7 +191,8 @@ export default function App() {
     }
   }
   async function logout() {
-    if (!allowNavigation()) return;
+    if (signingOut || !allowNavigation()) return;
+    setSigningOut(true);
     setStudentDetail(null);
 
     setReview(null);
@@ -196,11 +202,18 @@ export default function App() {
 
     try {
       await api("/auth/logout", { method: "POST" });
-      await refresh();
+      // Older refreshes must not restore classroom data after sign-out succeeds.
+      sessionGeneration.current++;
+      setState(current => ({
+        user: null, demo: current?.demo ?? false,
+        students: [], labs: [], submissions: [], activity: [],
+      }));
       setError("");
       setToast("");
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setSigningOut(false);
     }
   }
   async function saveLab(lab: Lab) {
@@ -214,6 +227,16 @@ export default function App() {
     try { await refresh(); }
     catch (cause) { setError(`The lab was saved, but the workspace could not refresh. ${(cause as Error).message}`); }
   }
+  if (signingOut) return (
+    <main className="loading-screen" aria-label="Signing out" aria-busy="true">
+      <div className="loading-brand"><BrandLogo /></div>
+      <div className="loading-content" role="status">
+        <span className="signout-spinner" aria-hidden="true" />
+        <h1>Signing out…</h1>
+        <p>Closing your session. Please wait.</p>
+      </div>
+    </main>
+  );
   if (!state)
     return (
       <main className="loading-screen">
@@ -286,6 +309,7 @@ export default function App() {
         />
       )}
       </Suspense>
+      <Suspense fallback={<div className="modal-overlay"><section className="modal" role="dialog" aria-modal="true" aria-label="Opening workspace dialog"><p role="status">Opening your workspace…</p><button className="btn" onClick={() => { setReview(null); setEditor(null); }}>Cancel</button></section></div>}>
       {review && (
         <Review
           key={
@@ -314,12 +338,14 @@ export default function App() {
           onSave={saveLab}
         />
       )}
+      </Suspense>
       {upload && (
         <Upload
           lab={upload}
           initialTaskId={uploadTaskId}
           state={state}
           onClose={() => setUpload(null)}
+          onRefresh={refresh}
           onSaved={async () => {
             setUpload(null);
             setToast("Your work has been submitted.");
@@ -637,36 +663,98 @@ function Upload({
   state,
   onClose,
   onSaved,
+  onRefresh,
 }: {
   lab: Lab;
   initialTaskId: string;
   state: AppState;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onRefresh: () => Promise<unknown>;
 }) {
   const [taskId, setTaskId] = useState(initialTaskId || lab.tasks[0]?.id || "");
   const [files, setFiles] = useState<File[]>([]);
-  const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [drag, setDrag] = useState(false);
+  const [selectionNotice, setSelectionNotice] = useState("");
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState<"close" | "replace" | { taskId: string } | null>(null);
+  const stayButton = useRef<HTMLButtonElement>(null);
+  const leaveOrigin = useRef<HTMLElement | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const now = useDeadlineClock();
   const existing = state.submissions.find(
     (s) =>
       s.labId === lab.id &&
       s.taskId === taskId &&
       s.studentId === state.user?.id,
   );
+  const locked = Boolean(existing?.resubmissionLocked || existing?.grade);
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
+  const overLimit = files.length > 60 || totalBytes > 4 * 1024 * 1024;
+  const limitError = overLimit ? "Choose at most 60 files with a combined size no larger than 4 MB." : "";
+  function leave(target: "close" | "replace" | { taskId: string }) {
+    if (target === "close") { onClose(); return; }
+    setFiles([]);
+    setError("");
+    setSelectionNotice("");
+    setShowAllFiles(false);
+    setLeaveTarget(null);
+    if (target === "replace") requestAnimationFrame(() => fileInput.current?.focus());
+    else setTaskId(target.taskId);
+  }
+  function requestLeave(target: "close" | "replace" | { taskId: string } = "close") {
+    if (busy) return;
+    if (!files.length) { leave(target); return; }
+    leaveOrigin.current = document.activeElement as HTMLElement | null;
+    setLeaveTarget(target);
+  }
+  function keepEditing() {
+    setLeaveTarget(null);
+    requestAnimationFrame(() => leaveOrigin.current?.focus());
+  }
+  useEffect(() => { if (leaveTarget) stayButton.current?.focus(); }, [leaveTarget]);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (busy) return;
+      if (leaveTarget) keepEditing(); else requestLeave();
+    };
+    const unload = (event: BeforeUnloadEvent) => {
+      if (files.length || busy) { event.preventDefault(); event.returnValue = ""; }
+    };
+    const navigate = (event: Event) => {
+      if (busy || (files.length && !window.confirm("Discard selected project files and leave?"))) event.preventDefault();
+    };
+    window.addEventListener("keydown", escape, true);
+    window.addEventListener("beforeunload", unload);
+    window.addEventListener("labtrack:before-navigate", navigate);
+    return () => {
+      window.removeEventListener("keydown", escape, true);
+      window.removeEventListener("beforeunload", unload);
+      window.removeEventListener("labtrack:before-navigate", navigate);
+    };
+  }, [files.length, busy, leaveTarget, onClose]);
+  function selectFiles(selected: File[]) {
+    if (!selected.length || busy || leaveTarget) return;
+    if (selected.some(file => /\.zip$/i.test(file.name))) {
+      setError(`Extract compressed folders first, then choose your project files or folder.${files.length ? " Your current selection was kept." : ""}`);
+      return;
+    }
+    setError("");
+    const merged = mergeProjectFiles(files, selected);
+    setFiles(merged.files);
+    setSelectionNotice(merged.replaced ? `${merged.replaced} existing ${merged.replaced === 1 ? "file was" : "files were"} replaced by the newly selected version.` : "Files added to your selection.");
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || locked || leaveTarget || !files.length) return;
     setBusy(true);
     setError("");
-    if (
-      files.length > 60 ||
-      files.reduce((total, file) => total + file.size, 0) > 4 * 1024 * 1024
-    ) {
-      setError(
-        "Choose at most 60 files with a combined size no larger than 4 MB.",
-      );
+    if (overLimit) {
       setBusy(false);
       return;
     }
@@ -674,7 +762,6 @@ function Upload({
     data.append("labId", lab.id);
     data.append("taskId", taskId);
     data.append("expectedRevision", String(existing?.revision || 0));
-    if (link) data.append("link", link);
     for (const file of files)
       data.append("files", file, file.webkitRelativePath || file.name);
     try {
@@ -682,6 +769,9 @@ function Upload({
       await onSaved();
     } catch (e) {
       setError((e as Error).message);
+      if ((e as { status?: number }).status === 409) {
+        try { await onRefresh(); } catch { /* Keep the upload error visible if refresh also fails. */ }
+      }
     } finally {
       setBusy(false);
     }
@@ -690,7 +780,10 @@ function Upload({
     <div
       className="modal-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          requestLeave();
+        }
       }}
     >
       <form
@@ -698,19 +791,21 @@ function Upload({
         role="dialog"
         aria-modal="true"
         aria-label="Submit lab work"
+        aria-busy={busy}
         onSubmit={submit}
       >
         <div className="modal-head">
           <div>
             <h2>Submit work</h2>
             <p>
-              {lab.title} · {deadline(lab)}
+              {lab.title} · {deadlineRemaining(lab.dueDate, now)}
             </p>
           </div>
           <button
             className="icon-btn"
             type="button"
-            onClick={onClose}
+            onClick={() => requestLeave()}
+            disabled={busy || !!leaveTarget}
             aria-label="Close submission form"
           >
             <X size={22} />
@@ -721,15 +816,11 @@ function Upload({
             Choose a task
             <select
               value={taskId}
-              onChange={(e) => {
-                setTaskId(e.target.value);
-                setFiles([]);
-                setLink("");
-                setError("");
-              }}
+              disabled={busy || !!leaveTarget}
+              onChange={(e) => requestLeave({ taskId: e.target.value })}
             >
               {lab.tasks.map((t) => (
-                <option key={t.id} value={t.id}>
+                <option key={t.id} value={t.id} disabled={state.submissions.some(item => item.labId === lab.id && item.taskId === t.id && item.studentId === state.user?.id && (item.resubmissionLocked || item.grade))}>
                   {t.title} · {t.maxMarks} marks
                 </option>
               ))}
@@ -741,13 +832,14 @@ function Upload({
               {lab.tasks.find((t) => t.id === taskId)?.description}
             </p>
           </details>
-          {existing && (
+          {locked && <p className="warning-note" role="status">This task has been graded and is locked. You can still view your submitted work and published result.</p>}
+          {existing && !locked && (
             <p className="warning-note">
               <ArrowCounterClockwise size={17} /> Resubmitting replaces your
-              current task files and resets its grade.
+              current task files. You can resubmit only until your teacher grades this task.
             </p>
           )}
-          <div
+          {!locked && <div
             className={`upload-zone ${drag ? "dragging" : ""}`}
             onDragOver={(e) => {
               e.preventDefault();
@@ -757,91 +849,87 @@ function Upload({
             onDrop={(e) => {
               e.preventDefault();
               setDrag(false);
-              setFiles(Array.from(e.dataTransfer.files));
+              if (!busy) selectFiles(Array.from(e.dataTransfer.files));
             }}
           >
             <UploadSimple size={32} />
             <strong><span className="upload-desktop-copy">Drop your project here</span><span className="upload-mobile-copy">Add your project files</span></strong>
-            <p>HTML, CSS, JavaScript, images or a ZIP · 4 MB total</p>
+            <p>Choose individual files or your whole project folder. Up to 60 files · 4 MB total.</p>
+            <p>Each choice adds to your selection. Selecting the same file path again replaces that file.</p>
             <div className="upload-buttons">
               <label className="btn btn-small">
-                Choose files
+                <span><strong>Choose files</strong><small id="choose-files-help">Select one or more project files.</small></span>
                 <input
                   type="file"
+                  ref={fileInput}
                   multiple
-                  accept=".html,.htm,.css,.js,.json,.txt,.zip,.png,.jpg,.jpeg,.gif,.webp,.ico"
+                  accept=".html,.htm,.css,.js,.json,.txt,.png,.jpg,.jpeg,.gif,.webp,.ico"
                   aria-label="Choose project files"
-                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                  aria-describedby="choose-files-help"
+                  disabled={busy || !!leaveTarget}
+                  onChange={(e) => { selectFiles(Array.from(e.target.files || [])); e.target.value = ""; }}
                 />
               </label>
               <label className="btn btn-small">
-                Choose folder
+                <span><strong>Choose folder</strong><small id="choose-folder-help">Include a project folder and its subfolders.</small></span>
                 <input
                   type="file"
                   multiple
                   {...({ webkitdirectory: "" } as Record<string, string>)}
                   aria-label="Choose project folder"
-                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                  aria-describedby="choose-folder-help"
+                  disabled={busy || !!leaveTarget}
+                  onChange={(e) => { selectFiles(Array.from(e.target.files || [])); e.target.value = ""; }}
                 />
               </label>
             </div>
-          </div>
+          </div>}
           {files.length > 0 && (
-            <div className="selected-files">
-              {files.slice(0, 10).map((f, i) => (
+            <section className="upload-selection" aria-label="Selected project files">
+              <div className="upload-selection-heading"><strong>{files.length} of 60 files · {uploadSize(totalBytes)} / 4 MB</strong><button className="teacher-text-button" type="button" disabled={busy || !!leaveTarget} onClick={() => requestLeave("replace")}>Replace selection</button></div>
+              <div className="selected-files" id="selected-project-files">
+              {(showAllFiles ? files : files.slice(0, 10)).map((f, i) => (
                 <div key={i}>
                   <FileCode size={17} />
                   <span>{f.webkitRelativePath || f.name}</span>
-                  <small>{Math.ceil(f.size / 1024)} KB</small>
+                  <small>{uploadSize(f.size)}</small>
                   <button
                     className="icon-btn"
                     type="button"
                     aria-label={`Remove ${f.name}`}
+                    disabled={busy || !!leaveTarget}
                     onClick={() => setFiles(files.filter((_, j) => j !== i))}
                   >
                     <X size={14} />
                   </button>
                 </div>
               ))}
-              {files.length > 10 && (
-                <p className="muted">and {files.length - 10} more files</p>
-              )}
-            </div>
+              </div>
+              {files.length > 10 && <button className="teacher-text-button" type="button" aria-expanded={showAllFiles} aria-controls="selected-project-files" onClick={() => setShowAllFiles(value => !value)}>{showAllFiles ? "Show first 10 files" : `Show all ${files.length} files`}</button>}
+            </section>
           )}
-          <details className="optional-link">
-            <summary>Add a project link (optional)</summary>
-            <label className="field">
-              Project link
-              <input
-                type="url"
-                placeholder="https://github.com/your-name/your-lab"
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-              />
-            </label>
-            <p className="muted small-text">
-              Include source files for a preview. Your teacher can review the
-              link separately.
-            </p>
-          </details>
-          {error && (
+          {selectionNotice && <p className="upload-selection-notice" role="status">{selectionNotice}</p>}
+          {(error || limitError) && (
             <p className="error" role="alert">
-              {error}
+              {error || limitError}
             </p>
           )}
         </div>
-        <div className="modal-foot">
-          <button className="btn" type="button" onClick={onClose}>
+        {leaveTarget ? <div className="modal-foot upload-discard" role="alert">
+          <p>Your selected files have not been submitted. Discard this selection?</p>
+          <div><button className="btn" type="button" ref={stayButton} onClick={keepEditing}>Keep editing</button><button className="btn" type="button" onClick={() => leave(leaveTarget)}>Discard & {leaveTarget === "close" ? "close" : leaveTarget === "replace" ? "choose again" : "switch task"}</button></div>
+        </div> : <div className="modal-foot">
+          <button className="btn" type="button" disabled={busy} onClick={() => requestLeave()}>
             Cancel
           </button>
           <button
             className="btn btn-primary"
-            disabled={busy || (!files.length && !link) || !taskId}
+            disabled={busy || locked || overLimit || !files.length || !taskId}
           >
             <UploadSimple size={17} />
             {busy ? "Submitting…" : existing ? "Resubmit task" : "Submit task"}
           </button>
-        </div>
+        </div>}
       </form>
     </div>
   );

@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Database, StoredSubmission } from "./store.js";
+import type { Lab } from "../shared/types.js";
+import { labMetadata } from "./lab-instructions.js";
+import { ANALYSIS_MAX_PROJECTS, analysisProjects, type AnalysisSubmission } from "./analysis-budget.js";
 
 export interface SupabaseConfig {
   url: string;
@@ -135,7 +138,7 @@ export class SupabasePersistence {
   async load(deadline?: AbortSignal): Promise<Database> {
     const cached = this.config.cache && snapshot?.key === this.cacheKey ? snapshot : undefined;
     const result = (await this.rpc(
-      this.config.compact ? "labtrack_read_compact" : this.config.cache ? "labtrack_read_if_changed" : "labtrack_read",
+      this.config.compact ? "labtrack_read_workspace" : this.config.cache ? "labtrack_read_if_changed" : "labtrack_read",
       this.config.cache || this.config.compact ? { known_revision: cached?.revision ?? -1 } : {},
       deadline,
     )) as {
@@ -190,8 +193,15 @@ export class SupabasePersistence {
 
   metadata(data: Database): Database {
     if (!this.config.compact) return data;
-    return { ...data, submissions: data.submissions.map(({ binaryAssets: _, ...item }) => ({ ...item,
+    return { ...data, labs: data.labs.map(labMetadata), submissions: data.submissions.map(({ binaryAssets: _, ...item }) => ({ ...item,
       sourceOmitted: true, files: item.files.map(file => ({ path: file.path, content: "" })) })) };
+  }
+
+  async instructions(lab: Lab): Promise<Lab["instructionFile"]> {
+    const result = await this.rpc("labtrack_instructions", { lab_id: lab.id, expected_revision: lab.revision || 0 }) as { revision?: number; instructionFile?: Lab["instructionFile"] } | null;
+    if (result?.revision !== (lab.revision || 0)) throw new SupabaseConflictError("The lab instructions changed.");
+    if (typeof result.instructionFile?.content !== "string") throw new Error("Supabase returned invalid lab instructions.");
+    return result.instructionFile;
   }
 
   async projects(submissions: StoredSubmission[]): Promise<StoredSubmission[]> {
@@ -203,6 +213,20 @@ export class SupabasePersistence {
       if (!loaded || !Array.isArray(loaded.files)) throw new SupabaseConflictError("The reviewed submissions changed.");
       return loaded as StoredSubmission;
     });
+  }
+
+  async analysisProjects(submissions: StoredSubmission[]): Promise<AnalysisSubmission[]> {
+    const selected = submissions.slice(0, ANALYSIS_MAX_PROJECTS);
+    if (!selected.length) return [];
+    const result = await this.rpc("labtrack_analysis_projects", { expected_submissions: selected.map(({ id, revision }) => ({ id, revision })) });
+    if (!Array.isArray(result) || result.length !== selected.length) throw new SupabaseConflictError("The reviewed submissions changed.");
+    const projects = selected.map(item => {
+      const loaded = result.find(value => value?.id === item.id && value?.revision === item.revision);
+      if (!loaded || !Array.isArray(loaded.files)) throw new SupabaseConflictError("The reviewed submissions changed.");
+      return loaded as AnalysisSubmission;
+    });
+    // Also bound unexpected RPC output locally; the SQL applies the same limits before transfer.
+    return analysisProjects(projects);
   }
 
   async asset(submission: StoredSubmission, filename: string): Promise<{ mimeType: string; content?: string; base64?: string } | undefined> {

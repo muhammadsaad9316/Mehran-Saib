@@ -79,7 +79,13 @@
 }
 .student-title .teacher-title-copy > p { max-width: 54ch; margin-top: 8px; color: var(--teacher-muted); font-size: 14px; line-height: 1.65; }
 .student-heading-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.student-heading-actions .teacher-course-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--teacher-muted); font-size: 12px; white-space: nowrap; }
+.student-heading-actions .teacher-course-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--teacher-muted); font-size: 12px; }
+.student-heading-actions .teacher-course-meta svg { flex-shrink: 0; }
+.student-new-count { display: inline-grid; place-items: center; min-width: 21px; min-height: 21px; padding: 0 5px; border-radius: 50%; color: var(--student-graded-ink); background: var(--student-graded-surface); font-size: 11px; }
+.student-result-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 24px; padding: 16px 20px; border: 1px solid var(--teacher-edge); border-left: 3px solid var(--student-graded-ink); border-radius: 10px; background: var(--student-graded-surface); }
+.student-result-notice strong { color: var(--student-graded-ink); font-size: 15px; }
+.student-result-notice p { margin-top: 4px; color: var(--teacher-ink); font-size: 13px; line-height: 1.5; }
+.student-new-result { display: inline-block; margin-block: 6px; padding: 3px 8px; border-radius: 5px; color: var(--student-graded-ink); background: var(--student-graded-surface); font-size: 12px; font-weight: 600; }
 .student-heading-actions > button {
   gap: 7px;
   padding: 0 14px;
@@ -256,9 +262,21 @@
 .student-portal .upload-zone strong { color: var(--teacher-ink); }
 .student-portal .upload-zone > p { color: var(--teacher-muted); font-size: 13px; }
 .student-portal .upload-buttons { display: flex; flex-direction: column; width: 100%; }
-.student-portal .upload-buttons .btn { width: 100%; min-height: 44px; }
+.student-portal .upload-buttons .btn { width: 100%; min-height: 72px; padding: 12px; white-space: normal; }
+.student-portal .upload-buttons .btn > span { display: flex; flex-direction: column; gap: 6px; }
+.student-portal .upload-buttons small { color: var(--teacher-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
 .student-portal .upload-buttons input { position: absolute; display: block; width: 1px; height: 1px; opacity: 0; }
 .student-portal .upload-buttons label:focus-within { outline: 2px solid var(--teacher-focus); outline-offset: 4px; }
+.student-portal .upload-selection { margin-top: 20px; }
+.student-portal .upload-selection-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--teacher-ink); font-size: 13px; }
+.student-portal .upload-selection .selected-files { max-height: 240px; }
+.student-portal .upload-selection .selected-files > div { min-height: 44px; }
+.student-portal .upload-selection .selected-files .icon-btn { min-width: 44px; min-height: 44px; }
+.student-portal .upload-selection .teacher-text-button { min-height: 44px; }
+.student-portal .upload-selection-notice { margin-top: 12px; color: var(--teacher-muted); font-size: 12px; line-height: 1.5; }
+.student-portal .upload-discard { flex-direction: column; gap: 12px; }
+.student-portal .upload-discard p { color: var(--teacher-ink); font-size: 14px; line-height: 1.5; }
+.student-portal .upload-discard > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .student-portal .upload-modal .modal-foot .btn-primary { flex: 1; }
 .student-portal .optional-link { margin-top: 20px; border-top: 1px solid var(--teacher-edge); }
 .student-portal .optional-link summary { min-height: 44px; padding-top: 14px; color: var(--teacher-muted); font-size: 13px; cursor: pointer; }
@@ -281,8 +299,8 @@
   .student-task summary { display: flex; gap: 16px; min-height: 88px; }
   .student-task-label { flex: 1; }
   .student-task-actions > button { width: auto; }
-  .student-portal .upload-buttons { flex-direction: row; width: auto; }
-  .student-portal .upload-buttons .btn { width: auto; }
+  .student-portal .upload-buttons { flex-direction: row; width: 100%; }
+  .student-portal .upload-buttons .btn { flex: 1; width: 50%; }
   .student-portal .upload-zone > svg, .student-portal .upload-desktop-copy { display: inline; }
   .student-portal .upload-zone > strong { margin-top: 12px; }
   .student-portal .upload-mobile-copy { display: none; }
@@ -291,6 +309,7 @@
   .student-header { position: sticky; top: 0; z-index: 20; }
   .student-header-inner, .student-shell .teacher-workspace { padding-inline: 32px; }
   .student-navigation { position: static; display: flex; flex-direction: row; gap: 4px; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+  .student-result-notice { flex-direction: row; align-items: center; justify-content: space-between; }
   .student-navigation button { min-height: 44px; padding: 10px 14px; font-size: 13px; border-radius: 8px; }
   .student-shell .teacher-main { padding-top: 40px; padding-bottom: 24px; }
   .student-title { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 32px; }

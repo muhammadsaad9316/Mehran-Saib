@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,6 +18,9 @@ import type { AppState, Lab, Submission } from "../shared/types";
 import { studentProgress } from "./student-progress";
 import BrandLogo from "./BrandLogo";
 import QuordixLogo from "./QuordixLogo";
+import { deadlineRemaining, useDeadlineClock } from "./student-deadline";
+import { api } from "./api";
+import "./portal.css";
 
 interface Props {
   state: AppState;
@@ -25,7 +28,7 @@ interface Props {
   onReview: (submission: Submission) => void;
   onSwitchRole: () => void;
   onLogout: () => void;
-  onRefresh: () => Promise<unknown>;
+  onRefresh: (signal?: AbortSignal) => Promise<unknown>;
   error: string;
   onDismissError: () => void;
 }
@@ -36,26 +39,9 @@ const date = (value: string) =>
     month: "short",
     timeZone: "Asia/Karachi",
   });
-const deadline = (lab: Lab) =>
-  lab.dueDate ? `Due ${date(lab.dueDate)}` : "No deadline";
 const status = (work?: Submission) =>
   work?.grade?.published ? "Graded" : work ? "Submitted" : "To submit";
-
-function downloadInstructions(lab: Lab) {
-  if (!lab.instructionFile) return;
-  const bytes = Uint8Array.from(
-    atob(lab.instructionFile.content),
-    (character) => character.charCodeAt(0),
-  );
-  const url = URL.createObjectURL(
-    new Blob([bytes], { type: lab.instructionFile.contentType }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = lab.instructionFile.name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+const resultKey = (work: Submission) => `${work.id}:${work.revision}:${work.grade?.gradedAt}`;
 
 export default function StudentPortal({
   state,
@@ -73,6 +59,10 @@ export default function StudentPortal({
   const [submissionLab, setSubmissionLab] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [resultError, setResultError] = useState("");
+  const [seenResults, setSeenResults] = useState<Set<string>>(() => new Set());
+  const refreshRequest = useRef<AbortController | null>(null);
+  const now = useDeadlineClock();
   useEffect(() => {
     document.getElementById("student-content")?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
@@ -100,23 +90,56 @@ export default function StudentPortal({
       filter === "all" ||
       (filter === "remaining" ? item.remaining > 0 : item.remaining === 0),
   );
+  const isNewResult = (item: Submission) => Boolean(item.grade?.published && !item.grade.viewedAt && !seenResults.has(resultKey(item)));
+  const newResults = progress.flatMap(item => item.work).filter(isNewResult);
+  async function viewWork(item: Submission) {
+    onReview(item);
+    setResultError("");
+    if (!isNewResult(item)) return;
+    try {
+      await api(`/submissions/${item.id}/result-viewed`, {
+        method: "POST", body: JSON.stringify({ revision: item.revision, gradedAt: item.grade!.gradedAt }),
+      });
+      setSeenResults(seen => new Set(seen).add(resultKey(item)));
+    } catch {
+      setResultError("Your result opened, but its read status could not be saved. Open it again to retry.");
+    }
+  }
   function navigate(next: "labs" | "submissions") {
     setPage(next);
     setSelectedLab("");
     setFilter("all");
     setSubmissionLab("all");
   }
-  async function refresh() {
+  const refresh = useCallback(async () => {
+    if (refreshRequest.current) return;
+    const controller = new AbortController();
+    refreshRequest.current = controller;
     setRefreshing(true);
     setRefreshError("");
     try {
-      await onRefresh();
+      await onRefresh(controller.signal);
     } catch (error) {
-      setRefreshError((error as Error).message);
+      if (!controller.signal.aborted) setRefreshError((error as Error).message);
     } finally {
+      if (refreshRequest.current === controller) refreshRequest.current = null;
       setRefreshing(false);
     }
-  }
+  }, [onRefresh]);
+  useEffect(() => {
+    const update = () => {
+      if (document.visibilityState === "visible" && !document.querySelector('[role="dialog"]')) void refresh();
+    };
+    const timer = window.setInterval(update, 60000);
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+      refreshRequest.current?.abort();
+    };
+  }, [refresh]);
 
   return (
     <div className="main-shell teacher-shell student-shell">
@@ -145,12 +168,15 @@ export default function StudentPortal({
             ).map(([item, label, Icon]) => (
               <button
                 key={item}
+                aria-label={label}
+                aria-describedby={item === "submissions" && newResults.length ? "student-new-results-count" : undefined}
                 className={page === item ? "active" : ""}
                 aria-current={page === item ? "page" : undefined}
                 onClick={() => navigate(item)}
               >
                 <Icon size={20} weight={page === item ? "fill" : "regular"} />
                 <span>{label}</span>
+                {item === "submissions" && newResults.length > 0 && <span id="student-new-results-count" className="student-new-count" aria-label={`${newResults.length} new results`}>{newResults.length}</span>}
               </button>
             ))}
           </nav>
@@ -228,7 +254,7 @@ export default function StudentPortal({
               <span className="teacher-course-meta">
                 <CalendarBlank size={16} />{" "}
                 {current && page === "labs"
-                  ? deadline(current.lab)
+                  ? deadlineRemaining(current.lab.dueDate, now)
                   : "Fall 2026"}
               </span>
               <button
@@ -241,18 +267,26 @@ export default function StudentPortal({
               </button>
             </div>
           </div>
-          {(error || refreshError) && (
+          {(error || refreshError || resultError) && (
             <div className="teacher-error" role="alert">
-              <span>{error || refreshError}</span>
+              <span>{error || refreshError || resultError}</span>
               <button
                 aria-label="Dismiss error"
                 onClick={() => {
                   onDismissError();
                   setRefreshError("");
+                  setResultError("");
                 }}
               >
                 <X size={18} />
               </button>
+            </div>
+          )}
+
+          {newResults.length > 0 && (
+            <div className="student-result-notice" role="status">
+              <div><strong>{newResults.length === 1 ? "1 new result" : `${newResults.length} new results`}</strong><p>Your teacher has published marks or feedback for your work.</p></div>
+              <button className="student-outline-button" onClick={() => navigate("submissions")}>View results <ArrowRight size={17} /></button>
             </div>
           )}
 
@@ -351,7 +385,7 @@ export default function StudentPortal({
                       <p className="student-meta">
                         <span>{lab.tasks.length} tasks</span>
                         <span>{lab.totalMarks} marks</span>
-                        <span>{deadline(lab)}</span>
+                        <span>{deadlineRemaining(lab.dueDate, now)}</span>
                       </p>
                     </div>
                     <div className="student-lab-progress">
@@ -364,6 +398,7 @@ export default function StudentPortal({
                           const item = work.find(
                             (item) => item.taskId === task.id,
                           );
+                          const locked = Boolean(item?.resubmissionLocked || item?.grade);
                           return (
                             <button
                               key={task.id}
@@ -375,9 +410,9 @@ export default function StudentPortal({
                                     ? "submitted"
                                     : "to-submit"
                               }
-                              title={`${task.title} · ${item ? "Resubmit this task" : "Submit this task"}`}
-                              aria-label={`Task ${index + 1}: ${task.title}. ${status(item)}. ${item ? "Resubmit task" : "Submit task"}`}
-                              onClick={() => onSubmit(lab, task.id)}
+                              title={`${task.title} · ${locked ? "View submission" : item ? "Resubmit this task" : "Submit this task"}`}
+                              aria-label={`Task ${index + 1}: ${task.title}. ${status(item)}. ${locked ? "View submission" : item ? "Resubmit task" : "Submit task"}`}
+                              onClick={() => locked && item ? viewWork(item) : onSubmit(lab, task.id)}
                             >
                               <span className="student-track-title">
                                 {item?.grade?.published ? (
@@ -454,12 +489,13 @@ export default function StudentPortal({
                 <div className="student-lab-intro">
                   {current.lab.description && <p>{current.lab.description}</p>}
                   {current.lab.instructionFile && (
-                    <button
+                    <a
                       className="teacher-text-button"
-                      onClick={() => downloadInstructions(current.lab)}
+                      href={`/api/labs/${encodeURIComponent(current.lab.id)}/instructions?revision=${current.lab.revision || 0}`}
+                      download={current.lab.instructionFile.name}
                     >
                       <DownloadSimple size={16} /> Download instructions
-                    </button>
+                    </a>
                   )}
                 </div>
               )}
@@ -467,6 +503,7 @@ export default function StudentPortal({
                 const item = current.work.find(
                   (item) => item.taskId === task.id,
                 );
+                const locked = Boolean(item?.resubmissionLocked || item?.grade);
                 return (
                   <details
                     className="student-task"
@@ -515,6 +552,7 @@ export default function StudentPortal({
                       {item?.grade?.published && (
                         <div className="student-feedback">
                           <span className="student-kicker">PUBLISHED RESULT</span>
+                          {isNewResult(item) && <span className="student-new-result">{item.grade.feedback ? "New feedback" : "New grade"}</span>}
                           <strong>
                             {item.grade.marks}/{task.maxMarks} marks
                           </strong>
@@ -522,7 +560,7 @@ export default function StudentPortal({
                         </div>
                       )}
                       <div className="student-task-actions">
-                        <button
+                        {!locked && <button
                           className={
                             item
                               ? "student-outline-button"
@@ -532,15 +570,16 @@ export default function StudentPortal({
                         >
                           <UploadSimple size={17} />{" "}
                           {item ? "Resubmit task" : "Submit task"}
-                        </button>
+                        </button>}
                         {item && (
                           <button
                             className="teacher-text-button"
-                            onClick={() => onReview(item)}
+                            onClick={() => viewWork(item)}
                           >
-                            View submission <ArrowRight size={17} />
+                            {item.grade?.published ? "View result" : "View submission"} <ArrowRight size={17} />
                           </button>
                         )}
+                        {locked && <span className="student-meta">Graded submissions are locked.</span>}
                         {item && (
                           <span className="student-meta">
                             Submitted {date(item.submittedAt)}
@@ -593,6 +632,7 @@ export default function StudentPortal({
                         Task {lab.tasks.indexOf(task) + 1}
                       </span>
                       <h3>{task.title}</h3>
+                      {isNewResult(item) && <span className="student-new-result">{item.grade?.feedback ? "New feedback" : "New grade"}</span>}
                       <p className="student-meta">
                         Submitted {date(item.submittedAt)} · Revision{" "}
                         {item.revision}
@@ -620,9 +660,9 @@ export default function StudentPortal({
                     <button
                       className="student-outline-button"
                       aria-label={`View ${task.title} submission`}
-                      onClick={() => onReview(item)}
+                      onClick={() => viewWork(item)}
                     >
-                      View work <ArrowRight size={17} />
+                      {item.grade?.published ? "View result" : "View work"} <ArrowRight size={17} />
                     </button>
                     {item.grade?.published && item.grade.feedback && (
                       <p className="student-submission-feedback">

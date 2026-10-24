@@ -37,6 +37,7 @@ For an AI coding tool, read [../AGENTS.md](../AGENTS.md), [AI development](ai-de
 | Optimization and polish verification | [optimization-review.md](optimization-review.md) |
 | Reliability and optimization audit, 15 October 2026 | [reliability-audit-2026-10-15.md](reliability-audit-2026-10-15.md) |
 | Current reliability implementation and verification | [reliability-progress.md](reliability-progress.md) |
+| Six web app audit fixes, checks and release requirement, 23 October 2026 | [audit-fixes-2026-10-23.md](audit-fixes-2026-10-23.md) |
 
 ## Terminology
 

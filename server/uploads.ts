@@ -61,7 +61,7 @@ export function parseUploads(
   function add(filename: string, buffer: Buffer) {
     const filePath = safeFilePath(filename);
     const extension = filePath.split(".").pop()?.toLowerCase() || "";
-    if (!textExtensions.has(extension) && !imageTypes[extension])
+    if (!textExtensions.has(extension) && !Object.hasOwn(imageTypes, extension))
       throw new HttpError(
         400,
         `Unsupported file type: ${filePath}. Use HTML, CSS, JS, TXT, JSON or raster images.`,

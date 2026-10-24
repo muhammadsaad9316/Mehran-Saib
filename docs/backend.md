@@ -34,9 +34,9 @@ There is no Supabase Auth, self-registration, email verification, forgotten-pass
 
 ## Public/private projections
 
-`publicUser` removes `passwordHash`. `publicSubmission` removes `binaryAssets`; for students it removes unpublished grades and reports the status as submitted. `/state` also restricts students to their own work and published labs; only teachers receive activity.
+`publicUser` removes `passwordHash`. `publicSubmission` removes `binaryAssets`; for students it removes unpublished grades and reports the status as submitted. It derives `resubmissionLocked` from the presence of any saved grade, without exposing draft marks or feedback. `/state` also restricts students to their own work and published labs; only teachers receive activity.
 
-State includes source paths with empty content and `sourceOmitted=true`, plus authorized instruction-file base64. Selected source and binary images load through ownership-checked, revision-matched endpoints. Do not return `store.data` directly from a new endpoint.
+State includes source paths with empty content and `sourceOmitted=true`, plus instruction-file name/type/SHA-256 metadata. Selected source, binary images and handouts load through authorized, revision-matched endpoints. `lab-instructions.ts` projects lab metadata consistently for responses and attachment-preserving edits. Do not return `store.data` directly from a new endpoint.
 
 ## Mutation discipline
 
@@ -60,7 +60,8 @@ The conditional cache is private and keyed by project plus a hash of its credent
 
 - Lab totals equal summed task maximums. Labs need 1–20 tasks; tasks can have up to 80 requirement rules.
 - IDs must stay stable. Submitted tasks cannot be removed; maxima cannot drop below saved grades.
-- Only students submit, and only to published tasks. Each student/task has one current project. New work replaces previous work and clears its grade.
+- Only students submit, and only to published tasks. Each student/task has one current project. Ungraded work can be replaced. Any saved grade, including draft/zero grades, locks replacement for that task; the mutation rejects a later upload with 409.
+- Students can acknowledge only their own current published result using its revision and grade timestamp. The mutation rechecks ownership/publication and saves `grade.viewedAt` without changing the work or grade. A new grade clears that acknowledgement; no browser storage, additional table or RPC is needed.
 - A grade includes the reviewed revision; stale work returns 409. Zero is valid; incomplete report totals remain blank.
 - Activity is newest-first and capped at 100. It is a workflow feed, not an immutable audit log.
 - Parser checks and comparisons are read-only and never change marks.
@@ -76,3 +77,7 @@ Read [analysis](analysis.md) for parser budgets and [Supabase](supabase.md) for 
 Integration tests create isolated apps/stores and close them through `app.locals.store.close()`. `app.test.ts` covers access boundaries, state filtering, lab validation, resubmission, revision grading, exports and persistence. `supabase.test.ts` covers diffs/cache/conflicts/failures; `serverless.test.ts` covers request-owned stores and early responses. Upload, analysis, instruction, report and provisioning suites cover their own boundaries.
 
 Run `npm test` and `npm run build`. MongoDB connectivity, HTTPS proxies and live provider deployment require their own environment checks; mocked RPC tests do not verify them. See [operations](operations.md).
+
+On 23 October 2026, upload allowlist and backup-provider regressions, parser work budgets and bounded analysis-source reads passed the full 135-test suite and production build on Node 26.3.0. All 28 desktop/mobile browser scenarios reported success, but the runner stalled during fixture cleanup and was stopped. The login reconciliation and private analysis-read migrations were applied to the hosted database; catalog checks confirmed that browser roles could access no application table or function. Application code deployment was not performed in this verification.
+
+Later that day, the [six audit fixes](audit-fixes-2026-10-23.md) passed 137 unit/integration tests, the build and all 52 desktop/mobile browser scenarios with normal fixture cleanup. The compact-instructions migration is tested locally but still needs explicit hosted-application approval; deploy the updated app only after that migration.

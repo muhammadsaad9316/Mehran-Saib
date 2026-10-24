@@ -25,11 +25,11 @@ The existing project's public identifier is `akudfcgksdjlipxxwfdu`; its [dashboa
 
 Uploads consume **database** bytes, including base64 overhead. A zero Supabase Storage usage figure does not mean project uploads use no storage.
 
-The [public demo](public-demo.md) adds four independent `labtrack_demo_*` tables and nine matching private RPCs in this same project. They have their own users, payloads, revision and login budgets. Their migration creates no copies of classroom data and changes no existing classroom rows. Namespace-aware server routing and cache keys keep all authorized reads/writes within one workspace.
+The [public demo](public-demo.md) has four independent `labtrack_demo_*` tables and twelve matching private RPCs in this same project, including bounded-analysis, workspace-metadata and instruction reads. They have their own users, payloads, revision and login budgets. Their migrations create no copies of classroom data. Namespace-aware server routing and cache keys keep all authorized reads/writes within one workspace. Both namespaces share only the pure `labtrack_lab_metadata(jsonb)` projection helper, which accesses no tables.
 
 ## Permissions
 
-Each namespace's four tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. Each namespace's nine RPCs are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
+Each namespace's four tables have RLS enabled. Table privileges are revoked from `PUBLIC`, `anon` and `authenticated`; `service_role` has the required server privileges. Each namespace's twelve RPCs and the shared pure projection helper are `SECURITY INVOKER`, use an empty `search_path` and explicitly restrict execution to `service_role`. There are no browser RLS policies because browser database access is intentionally denied.
 
 Supabase secret keys resolve to an elevated server role that bypasses RLS. Express's session, role and ownership checks therefore enforce classroom authorization. Never fix an API error by disabling RLS, granting browser access or adding `SECURITY DEFINER`. See [API key guidance](https://supabase.com/docs/guides/getting-started/api-keys) and [RLS documentation](https://supabase.com/docs/guides/database/postgres/row-level-security). The informational [RLS Enabled No Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) notice fits this server-only design.
 
@@ -40,16 +40,21 @@ Supabase secret keys resolve to an elevated server role that bypasses RLS. Expre
 | `labtrack_read()` | `{}` | `{ revision, data: { users, labs, submissions, activity, sessions } }`, arrays ordered by position/ID |
 | `labtrack_read_if_changed(known_revision bigint default -1)` | `{ known_revision }` | Same full result when changed; `{ revision, data: null }` when unchanged |
 | `labtrack_write(expected_revision bigint, upserts jsonb, deletions jsonb)` | Expected global revision and document diff | Next revision, or `-1` for storage safeguard; `PT409` on conflict |
-| `labtrack_read_compact(known_revision bigint default -1)` | Revision | Metadata only; null data on unchanged revision |
+| `labtrack_read_compact(known_revision bigint default -1)` | Revision | Legacy compact submission read; still includes lab attachment bytes |
+| `labtrack_read_workspace(known_revision bigint default -1)` | Revision | Current app metadata, including instruction name/type/SHA-256 without bytes; null data on unchanged revision |
+| `labtrack_instructions(lab_id, expected_revision)` | Exact lab revision | Selected attachment and revision; null on missing/stale lab |
 | `labtrack_write_scoped(expected_revision, upserts, deletions, expected_documents)` | Diff plus expected touched/user/lab records | Next revision; independent stale writes allowed, relevant changes raise PT409 |
 | `labtrack_project(submission_id, expected_revision)` | Exact project revision | Selected source, without private binary bytes |
-| `labtrack_projects(expected_submissions)` | Array of `{id, revision}` | Batch selected source for analysis, all revisions checked |
+| `labtrack_projects(expected_submissions)` | Array of `{id, revision}` | Full batch selected source, all revisions checked |
+| `labtrack_analysis_projects(expected_submissions)` | At most 200 unique `{id, revision}` entries | Analysis-only source: at most 40 files/200,000 UTF-8 bytes per project and 2,000,000 bytes total; preserves paths/order and marks omitted source incomplete. Exact revisions required; no binary bytes. |
 | `labtrack_asset(submission_id, expected_revision, asset_path)` | Exact revision/path | One authorized-route file payload |
 | `labtrack_login_attempt(attempt_key text, clear_attempts boolean default false)` | 64-character hex account key, optional clear flag | Atomically admits five attempts per one-minute bucket; the fifth starts a full one-minute cooldown. Blocked requests do not extend it; successful login clears the bucket. |
 
 Each upsert is `{ collection, id, document, position }`; each deletion is `{ collection, id }`. The server diffs both document content and array position. No-op mutations avoid the write RPC.
 
 Both write functions lock metadata row 1, apply changes and advance the revision atomically. Legacy writes require an exact global revision. Scoped writes compare expected documents when it changed, protecting touched records and user/lab dependencies while permitting unrelated writes. New submission source is split into payloads; metadata grade updates do not rewrite source. SQL caps activity at 100 and cleans expired/excess sessions. The adapter reloads authoritative metadata after confirmed compact writes before caching it, so pruning and concurrent records cannot corrupt the cache. Stale writes raise custom SQLSTATE `PT409`. Do not change it to `40001`: the prior deployment incident involved PostgREST repeatedly retrying that serialization code. The server retains compatibility handling for `40001`, but the committed SQL uses `PT409`.
+
+Lab guards accept either the full legacy document or its exact metadata projection. Scoped lab writes carrying unchanged instruction metadata retain the stored attachment after checking its name/type/SHA-256; mismatches raise `PT409`. New full attachments retain existing size/growth safeguards. Full backup RPCs continue to include all handout bytes.
 
 The latest storage guard checks `pg_database_size(current_database()) + positive_content_growth_bytes * 2 >= 400000000` only when source/attachment content grows. Grade/publication metadata changes and shrinking content stay available. Rejection returns `-1` normally before any record changes; the adapter maps it to HTTP 507. Users/sessions retain headroom. This is an application threshold, not a precise disk forecast or a provider quota guarantee.
 
@@ -67,7 +72,7 @@ Manual database edits must go through an equivalent versioned transaction that a
 
 Apply these files in order to a **fresh** project before connecting the app:
 
-| Repository file | Hosted history version/name checked on 15 October 2026 |
+| Repository file | Hosted history status checked on 24 October 2026 |
 | --- | --- |
 | [20261012094828_labtrack_private_persistence.sql](../supabase/migrations/20261012094828_labtrack_private_persistence.sql) | `20261012094828` / `labtrack_private_persistence` |
 | [20261013022154_fix_labtrack_conflict_retry_loop.sql](../supabase/migrations/20261013022154_fix_labtrack_conflict_retry_loop.sql) | `20261013022154` / `fix_labtrack_conflict_retry_loop` |
@@ -75,11 +80,24 @@ Apply these files in order to a **fresh** project before connecting the app:
 | [20261013041432_optimize_free_tier_reads.sql](../supabase/migrations/20261013041432_optimize_free_tier_reads.sql) | `20261013041432` / `optimize_free_tier_reads` |
 | [20261013041643_reserve_auth_capacity.sql](../supabase/migrations/20261013041643_reserve_auth_capacity.sql) | `20261013041643` / `reserve_auth_capacity` |
 | [20261015122901_reliability_payloads.sql](../supabase/migrations/20261015122901_reliability_payloads.sql) | `20261015122901` / `reliability_payloads` |
-| [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql) | Pending application to the hosted project |
+| [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql) | Historical gap retained; equivalent policy applied by the reconciliation below |
+| [20261019093050_public_demo_isolation.sql](../supabase/migrations/20261019093050_public_demo_isolation.sql) | `20261019093050` / `public_demo_isolation` |
+| [20261023171435_reconcile_classroom_login_cooldown.sql](../supabase/migrations/20261023171435_reconcile_classroom_login_cooldown.sql) | `20261023171435` / `reconcile_classroom_login_cooldown` |
+| [20261023171717_bounded_analysis_sources.sql](../supabase/migrations/20261023171717_bounded_analysis_sources.sql) | `20261023171717` / `bounded_analysis_sources` |
+| [20261024105836_compact_lab_instructions.sql](../supabase/migrations/20261024105836_compact_lab_instructions.sql) | `20261024105836` / `compact_lab_instructions` |
+| [20261024105858_reuse_handout_checksums.sql](../supabase/migrations/20261024105858_reuse_handout_checksums.sql) | `20261024105858` / `reuse_handout_checksums` |
 
 The initial file was renamed byte-for-byte to match verified hosted history on 15 October 2026; no reset or replay. The sixth migration, [20261015122901_reliability_payloads.sql](../supabase/migrations/20261015122901_reliability_payloads.sql), was applied and its recorded version matches. Full before/after classroom checksums matched. **Do not run a blind migration push against the existing classroom.** Inspect remote history and function definitions first. Later migrations include non-idempotent `CREATE TABLE/FUNCTION` statements and are not scripts to replay on every startup.
 
-The seventh migration, [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql), changes only the private login limiter. Apply it before deploying the five-attempt policy to Vercel. It preserves the RPC signature and server-only permissions, caps old buckets at five attempts and shortens any remaining old cooldown to at most one minute. Isolated Postgres tests cover the five-attempt budget, fixed cooldown, expiry, clearing and permissions; they do not establish that this migration has been applied to a hosted project.
+The seventh migration, [20261015172900_five_attempt_login_cooldown.sql](../supabase/migrations/20261015172900_five_attempt_login_cooldown.sql), was absent from hosted history during the 23 October audit. A new reconciliation migration applied its policy without resetting or rewriting old history. Hosted function inspection confirmed the five-attempt gate, one-minute interval, invoker security and denied browser execution. The reconciliation caps old buckets at five attempts and shortens any remaining old cooldown to at most one minute; it does not change classroom records, payloads or revision. Isolated Postgres tests cover upgrading the observed old policy and preserving complete synthetic classroom data.
+
+The bounded-analysis migration adds one private read RPC per namespace and leaves existing source/download RPCs intact. It was applied on 23 October; empty-input calls and catalog checks passed. Security/performance advisors reported no warning/error findings afterward. The informational no-browser-RLS-policy notices remain expected. Both new migration filenames use the exact versions generated by hosted migration application. No synthetic classroom records were inserted into production for verification.
+
+The compact-instructions migration is required before deploying the updated app. It adds workspace/instruction reads for both namespaces, preserves legacy reads, updates scoped lab guards and bumps both metadata revisions to invalidate old snapshots. It was applied on 24 October after isolated PGlite tests with synthetic 3 MiB attachments and a verified encrypted classroom backup. The local filename was reconciled to the actual hosted version; SQL contents were unchanged.
+
+The checksum-reuse migration replaces only the shared metadata projection helper. Both namespaces reuse a server-stored SHA-256 when it is 64 lowercase hexadecimal characters; missing or malformed identities still hash the attachment bytes. New uploads always validate and hash their bytes on the server, ignoring a browser-supplied hash. The JavaScript projection follows the same rule. This optimization was also applied on 24 October, with its local filename reconciled to hosted history. It changes no records, revisions, response contracts or access grants.
+
+Both hosted migrations ran with repeatable-read transaction guards that abort if existing record, payload or login-limit fingerprints change. A deliberate grade modification triggered rollback in the isolated guard test. All 13 before/after collection fingerprints and counts matched in production, including all 40 classroom submissions and their private project payloads, grades, 42 accounts, labs and sessions. No real upload, grading or account mutation was used for verification. Catalog checks confirmed invoker security, empty search paths, server execution and denied browser execution. Security advisors reported only the eight expected informational RLS-without-browser-policy notices; performance advisors reported no findings.
 
 There is no committed Supabase CLI `config.toml` or fully configured local stack. For a fresh hosted project, an owner can run each reviewed SQL file once through the SQL Editor in the order above; record that manual setup. For tracked deployment through MCP, apply each missing migration with its descriptive name to the selected project. SQL Editor execution itself does not create Supabase CLI migration-history entries.
 

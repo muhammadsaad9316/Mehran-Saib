@@ -8,6 +8,7 @@ import { load } from "cheerio";
 import type { Express } from "express";
 import { createApp } from "./app.js";
 import type { Submission } from "../shared/types.js";
+import type { Database } from "./store.js";
 
 test("teachers can publish without a deadline, then set or remove it while late flags follow the current deadline", async () => {
   const deadlineDir = await mkdtemp(
@@ -369,6 +370,10 @@ test("grades respect task bounds and drafts remain private until published", asy
   );
   assert.equal(privateGrade.grade, undefined);
   assert.equal(privateGrade.status, "submitted");
+  assert.equal(privateGrade.resubmissionLocked, true);
+  const draftSource = await student.get("/api/submissions/submission-2-1-1/source?revision=1").expect(200);
+  assert.equal(draftSource.body.grade, undefined);
+  assert.equal(draftSource.body.resubmissionLocked, true);
   await teacher
     .patch("/api/submissions/submission-2-1-1/grade")
     .send({
@@ -387,7 +392,12 @@ test("grades respect task bounds and drafts remain private until published", asy
   );
 });
 
-test("task resubmission preserves identity, increases revision and requires regrading", async () => {
+test("ungraded task resubmission preserves identity and increases revision", async () => {
+  await app.locals.store.mutate((data: Database) => {
+    const work = data.submissions.find(item => item.id === "submission-2-1-1")!;
+    delete work.grade;
+    work.status = "submitted";
+  });
   const htmlOptions = {
     filename: "article.html",
     filepath: "site/article.html",
@@ -410,6 +420,7 @@ test("task resubmission preserves identity, increases revision and requires regr
   assert.equal(response.body.revision, 2);
   assert.equal(response.body.grade, undefined);
   assert.equal(response.body.status, "submitted");
+  assert.equal(response.body.resubmissionLocked, false);
   assert.deepEqual(
     response.body.files.map((file: { path: string }) => file.path),
     ["site/article.html", "site/style.css"],
@@ -437,6 +448,11 @@ test("task resubmission preserves identity, increases revision and requires regr
 });
 
 test("URL-only submissions are validated and server-side files are rejected", async () => {
+  await app.locals.store.mutate((data: Database) => {
+    const work = data.submissions.find(item => item.id === "submission-2-1-2")!;
+    delete work.grade;
+    work.status = "submitted";
+  });
   await student
     .post("/api/submissions")
     .field("labId", "lab2")
@@ -457,6 +473,87 @@ test("URL-only submissions are validated and server-side files are rejected", as
     .expect(201);
   assert.equal(submitted.body.link, "https://example.com/student-project");
   assert.deepEqual(submitted.body.files, []);
+});
+
+test("saved draft and published zero grades lock only that task, including stale upload forms", async () => {
+  const { body: lab } = await teacher.post("/api/labs").send({
+    title: "Grading lock fixture", published: true,
+    tasks: [1, 2].map(index => ({ id: `lock-task-${index}`, title: `Lock task ${index}`, description: "Build a heading.", maxMarks: 10, requirements: [] })),
+  }).expect(201);
+  const submit = (taskId: string, revision?: number) => {
+    const upload = student.post("/api/submissions").field("labId", lab.id).field("taskId", taskId);
+    if (revision !== undefined) upload.field("expectedRevision", String(revision));
+    return upload.attach("files", Buffer.from("<h1>Lock fixture</h1>"), "index.html");
+  };
+  const { body: original } = await submit("lock-task-1", 0).expect(201);
+  for (const published of [false, true]) {
+    await teacher.patch(`/api/submissions/${original.id}/grade`).send({
+      marks: 0, feedback: "Retain this work", published, revision: 1,
+    }).expect(200);
+    const saved = structuredClone(app.locals.store.data.submissions.find((item: Submission) => item.id === original.id));
+    for (const revision of [undefined, 1]) {
+      const rejected = await submit("lock-task-1", revision).expect(409);
+      assert.match(rejected.body.error, /already been graded/);
+      assert.deepEqual(app.locals.store.data.submissions.find((item: Submission) => item.id === original.id), saved);
+    }
+    const { body: state } = await student.get("/api/state").expect(200);
+    const visible = state.submissions.find((item: Submission) => item.id === original.id);
+    assert.equal(visible.resubmissionLocked, true);
+    assert.equal(visible.grade?.marks, published ? 0 : undefined);
+  }
+  const other = await submit("lock-task-2", 0).expect(201);
+  assert.equal(other.body.resubmissionLocked, false);
+  assert.equal((await submit("lock-task-2", 1).expect(201)).body.revision, 2);
+});
+
+test("only the owner can acknowledge a current published result, with durable and idempotent read status", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "labtrack-result-viewed-"));
+  const options = { ...localDatabase, dataDir: directory, demo: true, production: false };
+  const isolated = await createApp(options);
+  let reopened: Express | undefined;
+  try {
+    const editor = request.agent(isolated);
+    const learner = request.agent(isolated);
+    await editor.post("/api/auth/demo").set("Host", "localhost").send({ role: "teacher" }).expect(200);
+    await learner.post("/api/auth/demo").set("Host", "localhost").send({ role: "student" }).expect(200);
+    const id = "submission-2-1-1";
+    const route = `/api/submissions/${id}/result-viewed`;
+    const original = isolated.locals.store.data.submissions.find((item: Submission) => item.id === id);
+    const body = { revision: 1, gradedAt: original.grade.gradedAt };
+    await request(isolated).post(route).send(body).expect(401);
+    await editor.post(route).send(body).expect(403);
+    await learner.post("/api/submissions/submission-2-2-1/result-viewed").send(body).expect(404);
+    for (const invalid of [{}, { ...body, revision: 1.5 }, { ...body, gradedAt: "" }])
+      await learner.post(route).send(invalid).expect(400);
+    await learner.post(route).send({ ...body, revision: 2 }).expect(409);
+    await learner.post(route).send({ ...body, gradedAt: "2000-01-01T00:00:00Z" }).expect(409);
+    await editor.patch("/api/labs/lab2").send({ published: false }).expect(200);
+    await learner.post(route).send(body).expect(404);
+    await editor.patch("/api/labs/lab2").send({ published: true }).expect(200);
+    await editor.patch(`/api/submissions/${id}/grade`).send({ marks: 0, feedback: "Private", published: false, revision: 1 }).expect(200);
+    await learner.post(route).send(body).expect(409);
+    const { body: published } = await editor.patch(`/api/submissions/${id}/grade`).send({ marks: 0, feedback: "Published", published: true, revision: 1 }).expect(200);
+    const current = { revision: 1, gradedAt: published.grade.gradedAt };
+    const before = structuredClone(isolated.locals.store.data);
+    const { body: viewed } = await learner.post(route).send({ ...current, marks: 10, viewedAt: "forged" }).expect(200);
+    assert.ok(Number.isFinite(Date.parse(viewed.viewedAt)));
+    assert.deepEqual((await learner.post(route).send(current).expect(200)).body, viewed);
+    const expected = structuredClone(before);
+    expected.submissions.find((item: Submission) => item.id === id).grade.viewedAt = viewed.viewedAt;
+    assert.deepEqual(isolated.locals.store.data, expected);
+    const state = (await learner.get("/api/state").expect(200)).body;
+    assert.equal(state.submissions.find((item: Submission) => item.id === id).grade.viewedAt, viewed.viewedAt);
+    await isolated.locals.store.close();
+    reopened = await createApp(options);
+    assert.equal(reopened.locals.store.data.submissions.find((item: Submission) => item.id === id).grade.viewedAt, viewed.viewedAt);
+    const nextEditor = request.agent(reopened);
+    await nextEditor.post("/api/auth/demo").set("Host", "localhost").send({ role: "teacher" }).expect(200);
+    const updated = await nextEditor.patch(`/api/submissions/${id}/grade`).send({ marks: 1, feedback: "Updated", published: true, revision: 1 }).expect(200);
+    assert.equal(updated.body.grade.viewedAt, undefined);
+  } finally {
+    await (reopened || isolated).locals.store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("teacher cannot remove already-submitted tasks or lower a recorded maximum", async () => {

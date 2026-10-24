@@ -66,15 +66,21 @@ export function decryptBackup(encrypted: string, key: Buffer): Database {
   } catch { throw new Error("Backup verification failed: wrong key, damaged file or invalid classroom data."); }
 }
 
-async function main() {
-  const root = fileURLToPath(new URL("../", import.meta.url));
-  if (existsSync(path.join(root, ".env"))) process.loadEnvFile(path.join(root, ".env"));
-  const [command, filename, destination] = process.argv.slice(2);
+export async function runBackup(args: string[], root: string, env: NodeJS.ProcessEnv = process.env) {
+  const [command, filename, destination] = args;
+  let supabase: SupabasePersistence | undefined;
+  if (command === "backup") {
+    const url = env.SUPABASE_URL, secretKey = env.SUPABASE_SECRET_KEY;
+    if (Boolean(url) !== Boolean(secretKey)) throw new Error("Set both SUPABASE_URL and the server-only SUPABASE_SECRET_KEY.");
+    if (url && env.MONGODB_URI) throw new Error("Configure one database provider: Supabase or MongoDB.");
+    if (env.MONGODB_URI) throw new Error("For MongoDB, use a provider snapshot until a database-specific export is configured.");
+    if (url && secretKey) supabase = new SupabasePersistence({ url, secretKey });
+  }
   const privateDirectory = path.join(root, ".data");
   await mkdir(privateDirectory, { recursive: true });
   const keyFile = path.join(privateDirectory, "backup-key");
   let key: Buffer;
-  if (process.env.LABTRACK_BACKUP_KEY) key = Buffer.from(process.env.LABTRACK_BACKUP_KEY, "base64");
+  if (env.LABTRACK_BACKUP_KEY) key = Buffer.from(env.LABTRACK_BACKUP_KEY, "base64");
   else {
     if (!existsSync(keyFile) && command === "backup") await writeFile(keyFile, randomBytes(32), { mode: 0o600, flag: "wx" });
     key = await readFile(keyFile);
@@ -83,10 +89,8 @@ async function main() {
   let database: Database;
   let output = filename;
   if (command === "backup") {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY)
-      database = await new SupabasePersistence({ url: process.env.SUPABASE_URL, secretKey: process.env.SUPABASE_SECRET_KEY }).load();
-    else if (process.env.MONGODB_URI) throw new Error("For MongoDB, use a provider snapshot until a database-specific export is configured.");
-    else database = JSON.parse(await readFile(path.join(process.env.LABTRACK_DATA_DIR || privateDirectory, "labtrack.json"), "utf8"));
+    if (supabase) database = await supabase.load();
+    else database = JSON.parse(await readFile(path.join(env.LABTRACK_DATA_DIR || privateDirectory, "labtrack.json"), "utf8"));
     output ||= path.join(privateDirectory, "backups", `classroom-${new Date().toISOString().replaceAll(":", "-")}.enc.json`);
     await mkdir(path.dirname(path.resolve(output)), { recursive: true });
     const encrypted = encryptBackup(database, key);
@@ -103,7 +107,13 @@ async function main() {
       await writeFile(output, JSON.stringify(database), { mode: 0o600, flag: "wx" });
     }
   }
-  console.log(JSON.stringify({ command, output: path.resolve(output!), verified: true, users: database.users.length, labs: database.labs.length, submissions: database.submissions.length, sessionsExcluded: true }));
+  return { command, output: path.resolve(output!), verified: true, users: database.users.length, labs: database.labs.length, submissions: database.submissions.length, sessionsExcluded: true };
+}
+
+async function main() {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  if (existsSync(path.join(root, ".env"))) process.loadEnvFile(path.join(root, ".env"));
+  console.log(JSON.stringify(await runBackup(process.argv.slice(2), root)));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(() => {

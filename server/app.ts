@@ -18,6 +18,7 @@ import { isLabThreeCheck } from "../shared/lab-three-checks.js";
 import { evidenceVersion } from "../shared/evidence.js";
 import { logFailure } from "./diagnostics.js";
 import { stableJson } from "./serialization.js";
+import { labMetadata as publicLab } from "./lab-instructions.js";
 import { SupabaseConflictError, SupabaseUnavailableError, SupabaseWriteUnconfirmedError } from "./supabase.js";
 import {
   canonicalRollNumber,
@@ -147,6 +148,7 @@ function publicSubmission(
   includeSource = true,
 ): Submission {
   const { binaryAssets: _, ...safe } = submission;
+  safe.resubmissionLocked = Boolean(submission.grade);
   if (!teacher && safe.grade && !safe.grade.published) {
     delete safe.grade;
     safe.status = "submitted";
@@ -271,36 +273,42 @@ function validateLab(body: unknown, old?: Lab): Lab {
         400,
         "Instructions must be a PDF, Word or text document.",
       );
-    const content = text(
-      attachment.content,
-      "Instruction file",
-      7 * 1024 * 1024,
-    );
-    if (
-      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-        content,
-      ) ||
-      Buffer.from(content, "base64").length > 3 * 1024 * 1024
-    )
-      throw new HttpError(
-        400,
-        "Instruction file must be valid base64 and no larger than 3 MB.",
+    if (attachment.content === undefined && old?.instructionFile &&
+        name === old.instructionFile.name && attachment.contentType === old.instructionFile.contentType &&
+        attachment.sha256 === publicLab(old).instructionFile?.sha256) {
+      instructionFile = old.instructionFile;
+    } else {
+      const content = text(
+        attachment.content,
+        "Instruction file",
+        7 * 1024 * 1024,
       );
-    const acceptedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "text/plain",
-      "text/markdown",
-      "application/octet-stream",
-    ];
-    const contentType =
-      typeof attachment.contentType === "string" && attachment.contentType
-        ? attachment.contentType
-        : "application/octet-stream";
-    if (!acceptedTypes.includes(contentType))
-      throw new HttpError(400, "Unsupported instruction document type.");
-    instructionFile = { name, content, contentType };
+      if (
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+          content,
+        ) ||
+        Buffer.from(content, "base64").length > 3 * 1024 * 1024
+      )
+        throw new HttpError(
+          400,
+          "Instruction file must be valid base64 and no larger than 3 MB.",
+        );
+      const acceptedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+        "text/markdown",
+        "application/octet-stream",
+      ];
+      const contentType =
+        typeof attachment.contentType === "string" && attachment.contentType
+          ? attachment.contentType
+          : "application/octet-stream";
+      if (!acceptedTypes.includes(contentType))
+        throw new HttpError(400, "Unsupported instruction document type.");
+      instructionFile = { name, content, contentType, sha256: createHash("sha256").update(Buffer.from(content, "base64")).digest("hex") };
+    }
   }
   return {
     id: old?.id || randomUUID(),
@@ -621,7 +629,7 @@ export async function createApp(options: AppOptions = {}) {
             .map(publicUser)
         : [],
       labs: user
-        ? store.data.labs.filter((lab) => teacher || lab.published)
+        ? store.data.labs.filter((lab) => teacher || lab.published).map(publicLab)
         : [],
       submissions: user
         ? store.data.submissions
@@ -799,8 +807,8 @@ export async function createApp(options: AppOptions = {}) {
     const result = await store.mutate((data) => {
       const existing = data.labs.find(item => item.id === lab.id);
       if (existing) {
-        const { id: _, revision: __, ...original } = existing;
-        const { id: ___, revision: ____, ...incoming } = lab;
+        const { id: _, revision: __, ...original } = publicLab(existing);
+        const { id: ___, revision: ____, ...incoming } = publicLab(lab);
         if (stableJson(original) !== stableJson(incoming)) throw new HttpError(409, "This save operation already created a lab. Refresh before making another edit.");
         return existing;
       }
@@ -814,7 +822,7 @@ export async function createApp(options: AppOptions = {}) {
       );
       return lab;
     });
-    res.status(201).json(result);
+    res.status(201).json(publicLab(result));
   });
   app.post("/api/instructions/analyze", async (req, res) => {
     actor(res, "teacher");
@@ -861,7 +869,16 @@ export async function createApp(options: AppOptions = {}) {
       data.labs = data.labs.map((item) => (item.id === lab.id ? lab : item));
       addActivity(data, "lab", `${lab.title} updated`);
     });
-    res.json(lab);
+    res.json(publicLab(lab));
+  });
+  app.get("/api/labs/:id/instructions", async (req, res) => {
+    const user = actor(res);
+    const lab = store.data.labs.find(item => item.id === req.params.id && (user.role === "teacher" || item.published));
+    if (!lab?.instructionFile) throw new HttpError(404, "Instructions not found.");
+    if (String(lab.revision || 0) !== req.query.revision) throw new HttpError(409, "This lab changed. Refresh before downloading its instructions.");
+    const file = await store.instructions(lab);
+    if (!file?.content) throw new HttpError(404, "Instructions not found.");
+    res.attachment(file.name).type(file.contentType).send(Buffer.from(file.content, "base64"));
   });
   app.post(
     "/api/submissions",
@@ -937,6 +954,8 @@ export async function createApp(options: AppOptions = {}) {
             item.labId === labId &&
             item.taskId === taskId,
         );
+        if (old?.grade)
+          throw new HttpError(409, "This task has already been graded. You can view your submission, but cannot resubmit it.");
         if (expectedRevision !== undefined && (old?.revision || 0) !== expectedRevision)
           throw new HttpError(409, "Your submission already changed. Refresh and review the current work before replacing it.");
         const submission: StoredSubmission = {
@@ -1028,14 +1047,34 @@ export async function createApp(options: AppOptions = {}) {
     });
     res.json(publicSubmission(result, true));
   });
+  app.post("/api/submissions/:id/result-viewed", async (req, res) => {
+    const user = actor(res, "student");
+    const original = accessibleSubmission(req.params.id as string, res);
+    const revision = number(req.body?.revision, "Submission revision", 1, Number.MAX_SAFE_INTEGER);
+    if (!Number.isSafeInteger(revision)) throw new HttpError(400, "Submission revision must be an integer.");
+    const gradedAt = text(req.body?.gradedAt, "Grade timestamp", 50);
+    const viewedAt = await store.mutate(data => {
+      const work = data.submissions.find(item => item.id === original.id && item.studentId === user.id);
+      if (!work || !data.labs.some(lab => lab.id === work.labId && lab.published))
+        throw new HttpError(404, "Submission not found.");
+      if (work.revision !== revision || !work.grade?.published || work.grade.gradedAt !== gradedAt)
+        throw new HttpError(409, "The published result changed. Refresh before marking it as viewed.");
+      work.grade.viewedAt ||= new Date().toISOString();
+      return work.grade.viewedAt;
+    });
+    res.json({ viewedAt });
+  });
   app.get("/api/labs/:id/analysis", async (req, res) => {
     actor(res, "teacher");
     const lab = store.data.labs.find((item) => item.id === req.params.id);
     if (!lab) throw new HttpError(404, "Lab not found.");
     const task = lab.tasks.find((item) => item.id === req.query.taskId);
     if (!task) throw new HttpError(404, "Task not found.");
-    const submissions = await store.projects(store.data.submissions.filter((submission) => submission.labId === lab.id && submission.taskId === task.id));
-    res.json({ ...analyzeTaskSubmissions(submissions, task), evidenceVersion: evidenceVersion(task, submissions) });
+    const candidates = store.data.submissions.filter((submission) => submission.labId === lab.id && submission.taskId === task.id);
+    const submissions = await store.analysisProjects(candidates);
+    const analysis = analyzeTaskSubmissions(submissions, task);
+    if (submissions.length < candidates.length) analysis.notices.push(`Only the first ${submissions.length} projects were loaded. Review the remaining submissions individually.`);
+    res.json({ ...analysis, evidenceVersion: evidenceVersion(task, submissions) });
   });
   app.get("/api/submissions/:id/analysis", async (req, res) => {
     const user = actor(res);
@@ -1056,8 +1095,10 @@ export async function createApp(options: AppOptions = {}) {
               (!req.query.peerId || item.id === req.query.peerId),
           )
         : [];
-    const [project, ...projects] = await store.projects([submission, ...peers]);
-    res.json({ ...analyzeSubmission(project, projects, task), evidenceVersion: evidenceVersion(task, [project, ...projects]) });
+    const [project, ...projects] = await store.analysisProjects([submission, ...peers]);
+    const analysis = analyzeSubmission(project, projects, task);
+    if (projects.length < peers.length) analysis.quality.push({ severity: "info", title: "Comparison limit reached", detail: `Only ${projects.length} peer projects were loaded. Review the remaining submissions individually.` });
+    res.json({ ...analysis, evidenceVersion: evidenceVersion(task, [project, ...projects]) });
   });
   app.get("/api/submissions/:id/source", async (req, res) => {
     const submission = accessibleSubmission(req.params.id as string, res);

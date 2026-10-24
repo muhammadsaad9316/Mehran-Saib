@@ -18,7 +18,7 @@ These services support static HTML/CSS/JavaScript lab projects. They do not run 
 | ZIP entries | At most 80 including directories |
 | Path | At most 200 characters, relative, preserved with `/` separators |
 
-The UI often labels binary-unit budgets as MB; code uses powers of 1024. ZIP declared uncompressed size is checked before decompression and extracted bytes are checked afterward. Hidden paths, dot/traversal components, absolute/drive paths, control characters, unsupported types, case-insensitive duplicates, encryption and damaged entries are rejected. Uploaded raster types are selected by extension; this is not a full image decoding or antivirus pipeline.
+The UI often labels binary-unit budgets as MB; code uses powers of 1024. ZIP declared uncompressed size is checked before decompression and extracted bytes are checked afterward. Hidden paths, dot/traversal components, absolute/drive paths, control characters, unsupported types, case-insensitive duplicates, encryption and damaged entries are rejected. Raster extension checks require an own entry in the allowlist, so inherited names such as `constructor` and `__proto__` are rejected for both direct files and archive entries. Uploaded raster types are selected by extension; this is not a full image decoding or antivirus pipeline.
 
 An image-only upload without a project link is rejected: at least one accepted source file or link is needed. Links must be HTTP(S) without embedded credentials. Link-only projects can be reviewed externally by the teacher but contain no fetched source for the analyzer.
 
@@ -66,11 +66,16 @@ There is no AI provider call, authorship classifier, plagiarism verdict, automat
 | Budget | Limit |
 | --- | --- |
 | Source files inspected per submission | 40 |
-| Characters processed per submission | 200,000 |
-| Batch submissions / single-review peer candidates | 200 |
-| Aggregate batch/peer character allowance | 2,000,000 |
+| UTF-8 source bytes processed per submission | 200,000 |
+| Projects loaded per request, including the selected review project | 200 |
+| Aggregate source bytes loaded per request | 2,000,000 |
+| HTML tags in one file | 2,000 |
+| Parser preflight nesting | 128 |
+| JavaScript tokens / CSS syntax punctuation in one file | 20,000 |
 
-These are independent of the larger upload allowance. Accepted uploads can exceed analyzer coverage; scan notices/quality errors must remain visible and require manual review. Pair scans are quadratic in the bounded number of analyzed submissions and run synchronously in the API. Fingerprint summaries/totals are computed once per source kind within the request and reused across pairs, without a global source cache. Larger classes need a deliberate performance redesign before simply increasing limits.
+These are independent of the larger upload allowance. The analysis-only Supabase RPC enforces file and byte limits before returning source to the server; JSON/MongoDB use the same projection. File order and paths remain available, but files outside the budget have no analyzed content and an explicit incomplete-source marker. Files are omitted whole rather than truncated into misleading parser input. Full source downloads and saved work remain unchanged. UTF-8 byte counting is more conservative than character counting for non-ASCII source.
+
+Linear HTML/CSS preflight and JavaScript tokenization reject excessive structure before recursive parsing. Accepted uploads can exceed analyzer coverage; scan notices/quality errors must remain visible and require manual review. Incomplete scans cannot produce comparable similarity flags, and unresolved non-file requirements receive a manual-review status. These budgets are work limits, not a hard wall-clock deadline. Pair scans remain quadratic in the bounded number of analyzed submissions and run synchronously in the API. Fingerprint summaries/totals are computed once per source kind within the request and reused across pairs, without a global source cache. Larger classes need a deliberate performance redesign before simply increasing limits.
 
 ## Instruction-document extraction
 

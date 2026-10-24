@@ -35,7 +35,7 @@ export interface Lab {
   totalMarks: number;
   published: boolean;
   tasks: Task[];
-  instructionFile?: { name: string; content: string; contentType: string };
+  instructionFile?: { name: string; content?: string; contentType: string; sha256?: string };
 }
 
 export interface Submission {
@@ -51,11 +51,15 @@ export interface Submission {
   status: "submitted" | "graded";
   revision: number;
   late: boolean;
+  /** Derived by the API; saved grades lock replacement even before publication. */
+  resubmissionLocked?: boolean;
   grade?: {
     marks: number;
     feedback: string;
     published: boolean;
     gradedAt: string;
+    /** Server acknowledgement for this published result; reset by a new grade. */
+    viewedAt?: string;
   };
 }
 

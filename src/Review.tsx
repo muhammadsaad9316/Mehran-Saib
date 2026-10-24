@@ -21,6 +21,7 @@ import { buildPreview, resolvePath } from "./preview";
 import { useSubmissionAssets } from "./submission-assets";
 import { evidenceVersion } from "../shared/evidence";
 import { useSubmissionSource } from "./submission-source";
+import "./review.css";
 
 export default function Review({
   submission: summary,
@@ -45,6 +46,13 @@ export default function Review({
   const student =
     state.students.find((s) => s.id === submission.studentId) || state.user!;
   const teacher = state.user?.role === "teacher";
+  useEffect(() => {
+    if (sourceLoading) return;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const input = dialog?.querySelector<HTMLInputElement>('input[data-initial-focus]');
+    (input ?? dialog?.querySelector<HTMLButtonElement>('button'))?.focus({ preventScroll: true });
+    input?.select();
+  }, [sourceLoading]);
   const [tab, setTab] = useState("preview");
   const [file, setFile] = useState(
     submission.files.find((f) => /\.html?$/i.test(f.path))?.path ||
@@ -60,6 +68,7 @@ export default function Review({
   const [marks, setMarks] = useState(String(submission.grade?.marks ?? ""));
   const [feedback, setFeedback] = useState(submission.grade?.feedback || "");
   const [publish, setPublish] = useState(submission.grade?.published ?? true);
+  const [expectedGradeAt, setExpectedGradeAt] = useState(submission.grade?.gradedAt || "");
   const [savedForm, setSavedForm] = useState(() => ({ marks, feedback, publish }));
   const [leaveTarget, setLeaveTarget] = useState<{ submission?: Submission } | null>(null);
   const stayButton = useRef<HTMLButtonElement>(null);
@@ -222,17 +231,18 @@ export default function Review({
     setNotice("");
     setBusy(true);
     try {
-      await api(`/submissions/${submission.id}/grade`, {
+      const savedSubmission = await api<Submission>(`/submissions/${submission.id}/grade`, {
         method: "PATCH",
         body: JSON.stringify({
           marks: Number(marks),
           feedback,
           published: publish,
           revision: submission.revision,
-          expectedGradeAt: submission.grade?.gradedAt || "",
+          expectedGradeAt,
         }),
       });
 
+      setExpectedGradeAt(savedSubmission.grade!.gradedAt);
       setSavedForm({ marks, feedback, publish });
       const nextTarget = advance && onNavigate ? advanceTarget : null;
       const statusText = publish ? "Grade published" : "Draft saved";
@@ -270,7 +280,7 @@ export default function Review({
       }
     } catch (e) {
       if ((e as Error & { status?: number }).status === 409) {
-        setError("The submission changed. Review the latest revision before grading.");
+        setError("This submission or grade changed. Close and reopen this review to load the latest grade before saving again.");
         try {
           await onSaved(
             "The submission changed. Review the latest revision before grading.",
@@ -524,13 +534,13 @@ export default function Review({
               <>
                 {entry ? (
                   <div className={teacher ? "review-browser" : "review-preview"}>
-                  <iframe
+                  {!sourceLoading && !sourceError && <iframe
                     id="submission-preview"
                     title="Student project preview"
                     sandbox="allow-scripts"
                     referrerPolicy="no-referrer"
                     srcDoc={preview}
-                  />
+                  />}
                   </div>
                 ) : (
                   <div className="empty-state">
@@ -761,14 +771,14 @@ export default function Review({
                               ? "metric-danger"
                               : highestMatch && highestMatch.percentage >= 50
                               ? "metric-warn"
-                              : "metric-clean"
+                              : highestMatch ? "metric-clean" : "metric-info"
                           }`}
-                          title={highestMatch ? `Highest peer similarity: ${highestMatch.percentage}%` : "No peer match"}
+                          title={highestMatch ? `Highest peer similarity: ${highestMatch.percentage}%` : "No comparable peer evidence. Review this task manually."}
                           aria-label={highestMatch ? `View similarity comparison (${highestMatch.percentage}%)` : "No comparable peer submissions"}
                           disabled={!highestMatch}
                           onClick={openSimilarity}
                         >
-                          <span className="metric-val">{highestMatch ? `${highestMatch.percentage}%` : "Clean"}</span>
+                          <span className={highestMatch ? "metric-val" : "metric-val metric-note"}>{highestMatch ? `${highestMatch.percentage}%` : "Needs manual review"}</span>
                           <span className="metric-label">Similarity</span>
                         </button>
                         <div className={`metric-tile ${analysis.quality.length === 0 ? "metric-clean" : "metric-info"}`} title="Automated code quality observations">

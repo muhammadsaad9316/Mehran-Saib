@@ -17,9 +17,11 @@
   --brand-window: var(--workspace-sheet);
 }
 
-.brand-logo { display: inline-flex; align-items: center; gap: 10px; font-family: "Manrope Variable", sans-serif; font-size: var(--brand-size, 24px); font-weight: 800; line-height: 1.1; letter-spacing: -1.2px; white-space: nowrap; }
+.brand-logo { display: inline-flex; align-items: center; gap: 10px; color: var(--workspace-ink); font-family: "Manrope Variable", sans-serif; font-size: var(--brand-size, 24px); font-weight: 800; line-height: 1.1; letter-spacing: -1.2px; white-space: nowrap; transition: color 180ms var(--workspace-ease); }
+.brand-logo:hover, a:is(:hover, :focus-visible) > .brand-logo { color: var(--workspace-accent); --brand-accent: var(--workspace-ink); }
 .brand-logo-icon { display: block; flex-shrink: 0; width: 40px; height: 31px; }
-.brand-logo-wordmark > span { color: var(--brand-accent); }
+.brand-logo-wordmark > span { color: var(--brand-accent); transition: color 180ms var(--workspace-ease); }
+.brand-logo-icon :is(path, circle) { transition: fill 180ms var(--workspace-ease), stroke 180ms var(--workspace-ease); }
 .teacher-header-mobile-brand { --brand-size: 23px; }
 .teacher-header-mobile-brand .brand-logo-icon { display: none; }
 .loading-brand { --brand-size: 28px; }
@@ -272,6 +274,7 @@
 .loading-screen > p { color: var(--workspace-muted); }
 .loading-progress { display: block; width: 160px; height: 3px; margin: 28px auto 0; overflow: hidden; border-radius: 4px; background: var(--workspace-edge); }
 .loading-progress > span { display: block; width: 45%; height: 100%; background: var(--workspace-accent); animation: workspace-loading 1.5s var(--workspace-ease) infinite; }
+.signout-spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--workspace-edge); border-top-color: var(--workspace-action); border-radius: 50%; animation: signout-spin .8s linear infinite; }
 .loading-caption { color: var(--workspace-muted); font-size: 11px; }
 
 /* Keep review, grading and editing on the same restrained paper system. */
@@ -364,6 +367,7 @@
 .teacher-minimal .teacher-review-next:hover { background: #ea580c; }
 
 @keyframes workspace-loading { from { transform: translateX(-110%); } to { transform: translateX(330%); } }
+@keyframes signout-spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
   .login-page {
     grid-template-columns: minmax(0, 1fr);
@@ -422,6 +426,8 @@
   .quordix-mobile-credit svg { width: 76px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .brand-logo, .brand-logo-wordmark > span, .brand-logo-icon :is(path, circle) { transition: none; }
   .loading-progress > span { animation: none; transform: translateX(60%); }
+  .signout-spinner { animation: none; }
   .login-page *, .teacher-minimal .modal { animation: none; transition: none; }
 }

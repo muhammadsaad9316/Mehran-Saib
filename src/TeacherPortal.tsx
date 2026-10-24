@@ -24,6 +24,7 @@ import { byRollNumber } from "../shared/roster";
 import CheckTasks from "./CheckTasks";
 import BrandLogo from "./BrandLogo";
 import { allowNavigation } from "./navigation-guard";
+import "./portal.css";
 
 interface Props {
   state: AppState;
@@ -726,27 +727,13 @@ export default function TeacherPortal({
                           <Printer size={15} weight="light" /> Print marks sheet
                         </a>
                         {lab.instructionFile && (
-                          <button
+                          <a
                             className="teacher-text-button"
-                            onClick={() => {
-                              const bytes = Uint8Array.from(
-                                atob(lab.instructionFile!.content),
-                                (char) => char.charCodeAt(0),
-                              );
-                              const url = URL.createObjectURL(
-                                new Blob([bytes], {
-                                  type: lab.instructionFile!.contentType,
-                                }),
-                              );
-                              const link = document.createElement("a");
-                              link.href = url;
-                              link.download = lab.instructionFile!.name;
-                              link.click();
-                              setTimeout(() => URL.revokeObjectURL(url), 1000);
-                            }}
+                            href={`/api/labs/${encodeURIComponent(lab.id)}/instructions?revision=${lab.revision || 0}`}
+                            download={lab.instructionFile.name}
                           >
                             Instructions
-                          </button>
+                          </a>
                         )}
                       </div>
                     </div>

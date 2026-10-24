@@ -13,6 +13,8 @@ Auth: app-owned users, scrypt hashes, opaque HttpOnly session cookie.
 Persistence: server-only Supabase REST RPCs; local JSON/MongoDB alternatives.
 Production: documented Vercel site, API entry api/index.ts and vercel.mjs.
 Supabase: compact JSONB metadata + private payloads; global revision/scoped guards; no browser DB/Auth client.
+
+Instruction attachments: metadata-only state via `read_workspace`; protected revision-matched downloads via `instructions`. The [compact-instructions](../supabase/migrations/20261024105836_compact_lab_instructions.sql) and [checksum-reuse](../supabase/migrations/20261024105858_reuse_handout_checksums.sql) migrations were applied on 24 October 2026 after encrypted backup and exact data-preservation checks. See [audit fixes](audit-fixes-2026-10-23.md).
 Writes: Store.mutate, atomic diff, replay validation on bounded conflicts.
 Grading: explicit teacher action; draft privacy; current submission revision.
 Uploads: static source/raster projects; private bytes; opaque iframe preview.
@@ -45,7 +47,7 @@ Search every caller before changing shared types/helpers. Backend `.js` import s
 - Mutating `store.data` directly, writing old snapshots on conflict, or adding infinite retries. Use replay-safe `Store.mutate` callbacks and recheck current constraints inside them.
 - Confusing the global database revision with the submission revision used for grading.
 - Recreating task IDs on lab edits, removing submitted tasks or lowering maxima below marks.
-- Keeping a grade after resubmission or showing private drafts to students.
+- Allowing replacement after any saved grade, including draft/zero grades, or showing private draft marks/feedback to students. The public lock flag conveys only that replacement is unavailable.
 - Grading from parser/similarity percentages, adding AI detection or treating matching excerpts as a verdict.
 - Running uploaded code on the server or adding `allow-same-origin` to its preview.
 - Assuming `prepare:class` is read-only or `provision:class` supports arbitrary projects. Read the actual side effects and hard-coded target check.
@@ -70,7 +72,7 @@ Implement: [specific behavior and acceptance criteria].
 Use: [isolated local JSON / independent hosted project / approved existing setup].
 Inspect actual implementation and all callers before changing contracts.
 Preserve app-owned auth, role filtering, task IDs, revision-safe writes,
-draft-grade privacy, grade clearing on resubmission and sandbox restrictions.
+draft-grade privacy, task locking after grading and sandbox restrictions.
 Do not use real classroom records for mutation tests.
 Update affected docs and report the verification performed and its limits.
 ```

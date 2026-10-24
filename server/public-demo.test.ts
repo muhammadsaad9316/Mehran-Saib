@@ -18,7 +18,8 @@ test("public demo and classroom API requests use independent private SQL records
   await database.exec("create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to service_role;");
   const directory = new URL("../supabase/migrations/", import.meta.url);
   const demoMigration = "20261019093050_public_demo_isolation.sql";
-  for (const name of (await readdir(directory)).filter(name => name.endsWith(".sql") && name !== demoMigration).sort())
+  const migrations = (await readdir(directory)).filter(name => name.endsWith(".sql")).sort();
+  for (const name of migrations.filter(name => name < demoMigration))
     await database.exec(await readFile(new URL(name, directory), "utf8"));
   const value = async (sql: string, params: unknown[] = []) => (await database.query<{ value: unknown }>(sql, params)).rows[0].value;
   const passwordHash = await hashPassword("ClassroomFixture2026!");
@@ -36,6 +37,7 @@ test("public demo and classroom API requests use independent private SQL records
   await database.exec(await readFile(new URL(demoMigration, directory), "utf8"));
   assert.deepEqual(await value("select public.labtrack_read() as value"), beforeMigration, "migration preserves populated classroom records and revision");
   assert.equal(await value("select count(*)::integer as value from public.labtrack_demo_records"), 0, "migration never copies classroom users or work");
+  for (const name of migrations.filter(name => name > demoMigration)) await database.exec(await readFile(new URL(name, directory), "utf8"));
   const previous = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY };
   Object.assign(process.env, { SUPABASE_URL: "https://public-demo-fixture.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_public_demo_fixture" });
   t.after(() => {
@@ -51,7 +53,7 @@ test("public demo and classroom API requests use independent private SQL records
       const revision = await value(`select revision as value from public.${name} where id=1`);
       return Response.json([{ revision }]);
     }
-    assert.match(name, /^labtrack_(?:demo_)?(?:read_compact|write_scoped|login_attempt|projects|asset)$/);
+    assert.match(name, /^labtrack_(?:demo_)?(?:read_workspace|write_scoped|login_attempt|projects|asset)$/);
     const body = JSON.parse(String(init.body));
     const keys = Object.keys(body);
     assert.ok(keys.every(key => /^[a-z_]+$/.test(key)));
@@ -151,10 +153,10 @@ test("public demo and classroom API requests use independent private SQL records
       assert.equal(await value("select has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') as value", [role, `public.labtrack_demo_${table}`]), false);
   }
   const routines = (await database.query<{ signature: string; prosecdef: boolean; definition: string }>("select p.oid::regprocedure::text as signature,p.prosecdef,pg_get_functiondef(p.oid) as definition from pg_proc p where p.proname like 'labtrack_demo_%'")).rows;
-  assert.equal(routines.length, 9);
+  assert.equal(routines.length, 12);
   for (const routine of routines) {
     assert.equal(routine.prosecdef, false);
-    assert.doesNotMatch(routine.definition, /\bpublic\.labtrack_(?!demo_)/, "demo SQL never refers to classroom tables or RPCs");
+    assert.doesNotMatch(routine.definition.replaceAll("public.labtrack_lab_metadata", ""), /\bpublic\.labtrack_(?!demo_)/, "demo SQL uses only its own records/RPCs and the pure shared metadata projection");
     for (const role of ["anon", "authenticated"])
       assert.equal(await value("select has_function_privilege($1,$2,'EXECUTE') as value", [role, routine.signature]), false);
   }
@@ -163,7 +165,7 @@ test("public demo and classroom API requests use independent private SQL records
   // Lower only this isolated demo's budget to exercise rejection without filling a database.
   await database.exec(writeFunction.definition.replace("20000000", "1"));
   await request(handler).post("/api/submissions").set("Cookie", demoStudent)
-    .field("labId", "public-demo-lab").field("taskId", "public-demo-css")
+    .field("labId", "public-demo-lab").field("taskId", "public-demo-html")
     .attach("files", Buffer.from(`<h1>${"larger demo project ".repeat(100)}</h1>`), "index.html").expect(507);
   await request(handler).patch(`/api/submissions/${demoId}/grade`).set("Cookie", demoTeacher)
     .send({ revision: 1, marks: 7, feedback: "Grading stays available at the demo content limit", published: true,

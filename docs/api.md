@@ -21,9 +21,11 @@ Public demo logins use `X-Labtrack-Workspace: demo`; the login form sets this fo
 | `PATCH /api/students/:id` | Teacher | `{ name, previousName }`; name is nonblank, at most 100 characters | 200 `User`; 409 if the saved name changed |
 | `POST /api/labs` | Teacher | Full editable lab body | 201 `Lab` |
 | `PATCH /api/labs/:id` | Teacher | Partial lab fields; `tasks` replaces the array | 200 `Lab` |
+| `GET /api/labs/:id/instructions?revision=N` | Teacher, or student in a published lab | Required current lab revision | 200 instruction attachment bytes; stale revision 409, missing/hidden attachment 404 |
 | `POST /api/instructions/analyze` | Teacher | `{ instructionFile: { name, content, contentType } }` | 200 `{ tasks, notice, text }` draft; not persisted |
 | `POST /api/submissions` | Student | Multipart `labId`, `taskId`, optional `link`, `expectedRevision`, repeated `files` | 201 `Submission`, including resubmission |
 | `PATCH /api/submissions/:id/grade` | Teacher | `{ marks, feedback, published, revision, expectedGradeAt? }` | 200 `Submission` |
+| `POST /api/submissions/:id/result-viewed` | Owning student in a published lab | `{ revision, gradedAt }` for the displayed published result | 200 `{ viewedAt }`; stale/unpublished result 409 |
 | `GET /api/labs/:id/analysis?taskId=...` | Teacher | Required task ID | 200 `TaskAnalysis` |
 | `GET /api/submissions/:id/analysis?peerId=...` | Teacher or owning student in a published lab | Optional targeted peer ID | 200 `AnalysisResult`; students receive no peers |
 | `GET /api/submissions/:id/source?revision=N` | Teacher or owning student in a published lab | Required current revision | 200 authorized source; 409 if revision changed |
@@ -51,7 +53,8 @@ Teachers can update only a student's name through the student-update route; acco
 - A signed-in user with `mustChangePassword=true` receives only their public user and empty classroom arrays. All other classroom routes return 403 until password setup completes.
 - Teachers receive the roster, all labs, all submissions and activity.
 - Students receive only themselves in `students`, published labs and their own submissions for those labs. Draft grades are removed and their status appears `submitted`.
-- Password hashes, session records and binary asset base64 never appear in state. State includes instruction base64 and file paths with empty content plus `sourceOmitted=true`. Source is loaded on demand through the protected source endpoint. Asset metadata is `{ path, mimeType }`; fetch bytes through the protected file route.
+- Public submissions include derived `resubmissionLocked`: any saved grade locks replacement, including a draft or zero mark, without exposing unpublished grade contents.
+- Password hashes, session records, instruction bytes and binary asset base64 never appear in state. Instruction metadata is `{ name, contentType, sha256 }`; fetch bytes through the protected instructions route. State includes source paths with empty content plus `sourceOmitted=true`. Source is loaded on demand through the protected source endpoint. Asset metadata is `{ path, mimeType }`; fetch bytes through the protected file route.
 
 ## Login and student creation
 
@@ -94,6 +97,8 @@ An optional UUID `Idempotency-Key` header scopes creation to this teacher/operat
 
 Optional `instructionFile` is `{ name, content, contentType }`; `content` is raw base64, without a data-URL prefix. Accepted filenames: PDF, DOC, DOCX, TXT, MD. Decoded size is at most 3 MiB. PATCH merges omitted fields from the old lab; a supplied task array replaces the whole array. Setting `instructionFile` to null removes it. Tasks with submissions cannot be removed; existing grade marks cannot exceed a reduced maximum. Full task edits send the loaded lab `revision` (legacy labs use 0); saved revisions increment. Stale revisions or changes during a save return 409. Partial scalar updates remain supported.
 
+State and lab-save responses omit attachment `content` and include its `sha256`. PATCH accepts that unchanged `{ name, contentType, sha256 }` metadata to retain an existing file; mismatched metadata cannot replace its bytes. Supplying new base64 replaces the attachment after validation. Instruction downloads enforce session access, current publication and exact lab revision, and return `Cache-Control: no-store`.
+
 | Field | Bound |
 | --- | --- |
 | Lab/task title | 1–120 characters |
@@ -123,7 +128,7 @@ await api<Submission>("/submissions", { method: "POST", body });
 
 Upload filenames preserve relative project paths. At least one source file or an HTTP(S) link is required; images alone without a link do not satisfy that condition. Links cannot embed credentials. A remote link is stored, never fetched/analyzed by the server.
 
-The selected lab/task must be published. New work starts at revision 1. The UI sends `expectedRevision`: 0 for new work, otherwise the displayed current revision; a mismatch returns 409. Replacement keeps the submission ID, increments revision, sets the new timestamp/late flag and removes the old grade. This does not preserve old files or earlier versions. Accepted types and budgets are in [analysis.md](analysis.md).
+The selected lab/task must be published. New work starts at revision 1. The UI sends `expectedRevision`: 0 for new work, otherwise the displayed current revision; a mismatch returns 409. Any saved grade, published or draft, rejects replacement with 409 even if the supplied revision still matches or is omitted. The check runs inside the mutation against current work. Ungraded replacement keeps the submission ID, increments revision and sets the new timestamp/late flag. This does not preserve old files or earlier versions. The student form now offers individual files or a folder; existing API link/ZIP compatibility remains. Accepted types and budgets are in [analysis.md](analysis.md).
 
 ## Save a grade
 
@@ -132,6 +137,12 @@ The selected lab/task must be published. New work starts at revision 1. The UI s
 ```
 
 Marks must be finite and within `0..task.maxMarks`; zero is a valid grade. Feedback is optional/empty or up to 4,000 characters. Publication is a required boolean. Revision is a required safe positive integer matching current work. The UI also sends `expectedGradeAt` (the displayed `gradedAt` or an empty string); changed grades return 409. Successful saves set `status="graded"` and add `gradedAt`; drafts remain private. Stale revisions return 409 and must be reviewed again, not blindly retried.
+
+## Remember a viewed result
+
+`POST /api/submissions/:id/result-viewed` acknowledges only the owning student's current published result. The server validates ownership, lab publication, integer submission revision and matching grade timestamp inside `Store.mutate`. Anonymous requests return 401, teachers return 403 and inaccessible submissions return 404. A stale revision/timestamp or unpublished result returns 409 without changing records.
+
+The first acknowledgement sets server-owned `grade.viewedAt`; repeats return the same timestamp. It changes no marks, feedback, submission revision, grading timestamp, project payload or activity. Published state includes this optional field so read status survives reloads and sign-ins. A later grade save replaces the grade object and clears the acknowledgement. This uses existing JSON metadata persistence with no new table or RPC.
 
 ## Analysis and exports
 

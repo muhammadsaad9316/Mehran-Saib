@@ -268,7 +268,7 @@ test("41 delayed independent classroom writes complete within the bounded retry 
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
     await new Promise(resolve => setTimeout(resolve, 20));
     const body = JSON.parse(String(options.body));
-    if (url.endsWith("labtrack_read_compact")) return json({ revision, data: body.known_revision === revision ? null : structuredClone(remote) });
+    if (url.endsWith("labtrack_read_workspace")) return json({ revision, data: body.known_revision === revision ? null : structuredClone(remote) });
     if (body.expected_revision !== revision && body.expected_documents.some((expected: { collection: keyof typeof remote; id: string; document: unknown }) => {
       const current = remote[expected.collection].find(item => item.id === expected.id) || null;
       return JSON.stringify(current) !== JSON.stringify(expected.document);
@@ -293,7 +293,7 @@ test("a confirmed compact write stays acknowledged when refresh fails and blocks
   const remote = emptyDatabase();
   let revision = 0, writes = 0, unavailable = false;
   t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
-    if (url.endsWith("labtrack_read_compact")) {
+    if (url.endsWith("labtrack_read_workspace")) {
       if (unavailable) return json({}, 503);
       return json({ revision, data: structuredClone(remote) });
     }

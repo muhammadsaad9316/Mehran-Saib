@@ -14,6 +14,7 @@ import {
 } from "./supabase.js";
 import { HttpError } from "./uploads.js";
 import { stableJson } from "./serialization.js";
+import { analysisProjects, ANALYSIS_MAX_PROJECTS, type AnalysisSubmission } from "./analysis-budget.js";
 
 export interface StoredUser extends User {
   passwordHash: string;
@@ -239,6 +240,17 @@ export class Store {
 
   async projects(submissions: StoredSubmission[]): Promise<StoredSubmission[]> {
     return this.supabase && submissions.some(item => item.sourceOmitted) ? this.supabase.projects(submissions) : submissions;
+  }
+
+  async instructions(lab: Lab): Promise<Lab["instructionFile"]> {
+    return this.supabase && lab.instructionFile?.content === undefined
+      ? this.supabase.instructions(lab) : lab.instructionFile;
+  }
+
+  async analysisProjects(submissions: StoredSubmission[]): Promise<AnalysisSubmission[]> {
+    const selected = submissions.slice(0, ANALYSIS_MAX_PROJECTS);
+    return this.supabase && selected.some(item => item.sourceOmitted)
+      ? this.supabase.analysisProjects(selected) : analysisProjects(selected);
   }
 
   async file(submission: StoredSubmission, filename: string) {

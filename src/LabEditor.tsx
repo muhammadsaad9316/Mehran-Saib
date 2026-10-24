@@ -41,6 +41,22 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
   const [dueDate, setDueDate] = useState(() => pakistanDateValue(lab?.dueDate));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const originalDraft = useRef(JSON.stringify([draft, dueDate]));
+  const dirty = JSON.stringify([draft, dueDate]) !== originalDraft.current;
+  function requestClose() {
+    if (!saving && (!dirty || window.confirm("Discard unsaved lab changes?"))) onClose();
+  }
+  useEffect(() => {
+    const unload = (event: BeforeUnloadEvent) => {
+      if (dirty || saving) { event.preventDefault(); event.returnValue = ""; }
+    };
+    const navigate = (event: Event) => {
+      if (saving || (dirty && !window.confirm("Discard unsaved lab changes?"))) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", unload);
+    window.addEventListener("labtrack:before-navigate", navigate);
+    return () => { window.removeEventListener("beforeunload", unload); window.removeEventListener("labtrack:before-navigate", navigate); };
+  }, [dirty, saving]);
   const [selectedTask, setSelectedTask] = useState(0);
   const activeTask = Math.min(selectedTask, draft.tasks.length - 1);
   const dialogRef = useRef<HTMLFormElement>(null);
@@ -197,7 +213,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
     <div
       className="modal-overlay"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <form
@@ -213,7 +229,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
           if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            if (!busy) onClose();
+            requestClose();
           }
           if (event.key === "Tab") {
             const controls = Array.from(
@@ -243,7 +259,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
             type="button"
             aria-label="Close lab editor"
             disabled={busy}
-            onClick={onClose}
+            onClick={requestClose}
           >
             <X size={22} />
           </button>
@@ -510,7 +526,7 @@ export function LabEditor({ lab, onClose, onSave }: LabEditorProps) {
             type="button"
             className="btn btn-ghost"
             disabled={busy}
-            onClick={onClose}
+            onClick={requestClose}
           >
             Cancel
           </button>

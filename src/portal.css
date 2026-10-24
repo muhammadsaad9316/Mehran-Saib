@@ -1,0 +1,4 @@
+@import "./teacher.css";
+@import "./student.css";
+/* Preserve polish precedence when the shared portal sheet loads after sign-in. */
+@import "./polish.css";

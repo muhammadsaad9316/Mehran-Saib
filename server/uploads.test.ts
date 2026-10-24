@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import AdmZip from "adm-zip";
+import request from "supertest";
+import { createApp } from "./app.js";
 import { HttpError, MAX_UPLOAD_BYTES, parseUploads, safeFilePath } from "./uploads.js";
 
 test("safe project paths preserve nesting and reject traversal, hidden or absolute paths", () => {
@@ -114,4 +119,45 @@ test("raster asset metadata stays separate from text preview files", () => {
   assert.deepEqual(parsed.files, []);
   assert.equal(parsed.binaryAssets[0].path, "images/photo.png");
   assert.equal(parsed.binaryAssets[0].mimeType, "image/png");
+});
+
+test("inherited object keys are rejected as upload extensions, including ZIP entries", () => {
+  for (const extension of ["constructor", "__proto__"]) {
+    const filename = `payload.${extension}`;
+    const file = { originalname: filename, buffer: Buffer.from("fixture") };
+    const zip = new AdmZip();
+    zip.addFile(filename, file.buffer);
+    for (const upload of [file, { originalname: "project.zip", buffer: zip.toBuffer() }]) {
+      assert.throws(
+        () => parseUploads([upload]),
+        (error: unknown) => error instanceof HttpError && error.status === 400 && /Unsupported file type/.test(error.message),
+      );
+    }
+  }
+});
+
+test("invalid upload extensions leave the JSON store usable for subsequent submissions and logout", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "labtrack-upload-types-"));
+  const app = await createApp({ dataDir: directory, demo: true, production: false, mongoUri: "", supabaseUrl: "", supabaseKey: "" });
+  try {
+    const teacher = request.agent(app), student = request.agent(app);
+    await teacher.post("/api/auth/demo").set("Host", "localhost").send({ role: "teacher" }).expect(200);
+    const lab = await teacher.post("/api/labs").send({
+      title: "Upload validation", published: true,
+      tasks: [{ id: "upload-task", title: "Upload task", maxMarks: 10, requirements: [] }],
+    }).expect(201);
+    await student.post("/api/auth/demo").set("Host", "localhost").send({ role: "student" }).expect(200);
+    const submit = (filename: string) => student.post("/api/submissions")
+      .field("labId", lab.body.id).field("taskId", "upload-task")
+      .attach("files", Buffer.from("<h1>Fixture</h1>"), "index.html")
+      .attach("files", Buffer.from("fixture"), filename);
+    for (const extension of ["constructor", "__proto__"]) await submit(`payload.${extension}`).expect(400);
+    const saved = await submit("image.png").expect(201);
+    assert.deepEqual(saved.body.assets, [{ path: "image.png", mimeType: "image/png" }]);
+    await student.post("/api/auth/logout").expect(200);
+    await teacher.patch(`/api/labs/${lab.body.id}`).send({ title: "Store remains usable" }).expect(200);
+  } finally {
+    await app.locals.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });

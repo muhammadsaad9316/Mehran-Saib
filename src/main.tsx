@@ -10,10 +10,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import App from "./App";
 import WorkspaceBoundary from "./WorkspaceBoundary";
 import "./styles.css";
-import "./teacher.css";
-import "./student.css";
 import "./polish.css";
-import "./review.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <WorkspaceBoundary><App /></WorkspaceBoundary>

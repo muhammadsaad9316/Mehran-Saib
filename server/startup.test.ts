@@ -26,7 +26,7 @@ test("persistent startup recovers after two unavailable reads and serves health 
   t.mock.method(console, "warn", (message: string) => warnings.push(message));
   let reads = 0;
   t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
-    assert.ok(url.endsWith("labtrack_read_compact"));
+    assert.ok(url.endsWith("labtrack_read_workspace"));
     assert.ok(init.signal instanceof AbortSignal);
     reads++;
     if (reads === 1)
@@ -103,7 +103,7 @@ test("serverless initialization remains fail-fast on an unavailable database", a
   const warn = t.mock.method(console, "warn", () => {});
   let reads = 0;
   t.mock.method(globalThis, "fetch", async (url: string) => {
-    assert.ok(url.endsWith("labtrack_read_compact"));
+    assert.ok(url.endsWith("labtrack_read_workspace"));
     reads++;
     return Response.json({ message: privateDetail }, { status: 503 });
   });
@@ -117,7 +117,7 @@ test("startup never replays a bootstrap write whose response was lost", async (t
   let reads = 0;
   let writes = 0;
   t.mock.method(globalThis, "fetch", async (url: string) => {
-    if (url.endsWith("labtrack_read_compact")) {
+    if (url.endsWith("labtrack_read_workspace")) {
       reads++;
       return Response.json({ revision: 0, data: emptyDatabase() });
     }
@@ -137,7 +137,7 @@ test("a connection lost while reading the initial response body is retried safel
   t.mock.method(console, "warn", () => {});
   let reads = 0;
   t.mock.method(globalThis, "fetch", async (url: string) => {
-    assert.ok(url.endsWith("labtrack_read_compact"));
+    assert.ok(url.endsWith("labtrack_read_workspace"));
     reads++;
     if (reads === 1) return new Response(new ReadableStream({
       start(controller) {

@@ -112,7 +112,7 @@ test("Lab 3 refuses an existing placeholder, teacher edits, or a duplicate with 
 
 test("Lab 3 preserves the supplied document and its advisory checks accept representative task solutions", async () => {
   const lab = await labThreeDraft();
-  assert.equal(createHash("sha256").update(Buffer.from(lab.instructionFile!.content,"base64")).digest("hex"),
+  assert.equal(createHash("sha256").update(Buffer.from(lab.instructionFile!.content!,"base64")).digest("hex"),
     "ba775c54eb1787a134eefa9bb9180c926a3bab7dc9d364f86b3485f290824ed1");
   const solutions = [
     '<html><head><style>body{background-color:lightgray}a:link{color:navy}a:hover{color:red}a:visited{color:purple}</style><link rel="stylesheet" href="style.css"></head><body><h1 style="color:navy">Hello</h1><a target="_blank" href="https://example.com">Visit</a><a href="#section2">Jump</a><section id="section2"><a href="#section2"><img src="photo.png" style="float:left" alt="Photo"></a><p>Wrapping text</p></section></body></html>',

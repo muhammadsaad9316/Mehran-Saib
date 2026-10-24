@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { analyzeSubmission, analyzeTaskSubmissions } from "./analysis.js";
 import type { Submission, Task } from "../shared/types.js";
 import { initialLabs } from "./seed.js";
+import { analysisProjects } from "./analysis-budget.js";
 
 const task: Task = {
   id: "task-1",
@@ -25,6 +26,45 @@ function submission(id: string, path: string, content: string): Submission {
     late: false,
   };
 }
+
+test("structural budgets stop deeply nested HTML, CSS and JavaScript before scoring", () => {
+  const rules: Task = { ...task, requirements: [{ id: "p", label: "Paragraph", type: "tag", value: "p" }] };
+  const sources = [
+    ["index.html", "<div>".repeat(18_000) + "<p>hello</p>" + "</div>".repeat(18_000)],
+    ["index.html", '< nope "' + "<div>".repeat(18_000) + "</div>".repeat(18_000)],
+    ["index.html", "<p>x</p>".repeat(2_001)],
+    ["index.html", "<div/>".repeat(2_001)],
+    ["index.html", `<${"custom".repeat(30)}>`.repeat(130)],
+    ["main.js", "(".repeat(130) + "1" + ")".repeat(130)],
+    ["main.js", "let answer=1;".repeat(5_000)],
+    ["style.css", "div{".repeat(130) + "color:red;" + "}".repeat(130)],
+  ];
+  for (const [path, source] of sources) {
+    const work = submission("a", path, source);
+    const result = analyzeSubmission(work, [submission("b", path, source)], rules);
+    assert.ok(result.quality.some(issue => /Analysis limit/.test(issue.title)), path);
+    assert.equal(result.requirements[0].needsReview, true, path);
+    assert.ok(result.similarities.every(pair => !pair.comparable), path);
+    assert.equal(analyzeTaskSubmissions([work], rules).submissions[0].comparable, false, path);
+    assert.equal(work.files[0].content, source, "budget checks do not modify saved source");
+  }
+});
+
+test("omitted analysis source keeps complete filenames and asks for manual review", () => {
+  const original = submission("a", "large.html", "x".repeat(200_001));
+  original.files.push({ path: "nested/style.css", content: "body{color:red}" });
+  const [bounded] = analysisProjects([original]);
+  const result = analyzeSubmission(bounded, [], { ...task, requirements: [
+    { id: "file", label: "Stylesheet", type: "file", value: "style.css" },
+    { id: "element", label: "Paragraph", type: "tag", value: "p" },
+  ] });
+  assert.deepEqual(bounded.files.map(file => file.path), original.files.map(file => file.path));
+  assert.equal(result.requirements[0].passed, true);
+  assert.equal(result.requirements[1].needsReview, true);
+  assert.ok(result.quality.some(issue => /omitted before loading/.test(issue.detail)));
+  assert.equal(analyzeTaskSubmissions([bounded], task).submissions[0].comparable, false);
+  assert.equal(original.files[0].content.length, 200_001);
+});
 
 test("HTML filename checks accept renamed pages in single and batch analysis, while other filenames remain exact", () => {
   const rules: Task = { ...task, requirements: [

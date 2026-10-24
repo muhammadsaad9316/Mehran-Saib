@@ -76,7 +76,9 @@ erDiagram
 
 These are logical relationships, not separate SQL tables or foreign keys. Tasks/requirements are inside labs; grades are inside submissions. Supabase stores five collections as JSONB metadata documents, with submission source and binary bytes in a separate private payload table.
 
-Public `User` excludes `passwordHash`; public `Submission` excludes binary base64. Server `Database` contains these private fields and sessions. Authorized state includes file paths with empty content and sourceOmitted=true, plus instruction base64. Selected source and images use authenticated, revision-checked reads. Teachers see all students/labs/submissions/activity. Students see themselves, published labs and their own work, with draft grades removed.
+Public `User` excludes `passwordHash`; public `Submission` excludes binary base64. Server `Database` contains these private fields and sessions. Authorized state includes file paths with empty content and sourceOmitted=true, plus instruction name/type/SHA-256 metadata. Selected source, images and handouts use authenticated, revision-checked reads. Supabase's `read_workspace` RPC projects lab metadata before transfer; handout bytes stay in private lab records and full backup reads. Teachers see all students/labs/submissions/activity. Students see themselves, published labs and their own work, with draft grades removed.
+
+Analysis uses a separate private source projection capped before database transfer: 200 projects, 40 source files/200,000 UTF-8 bytes per project and 2,000,000 bytes per request. Source omitted by those limits is marked incomplete and cannot produce similarity flags. Structural preflight also bounds parser work. Full authorized source/download routes retain complete saved work; see [analysis budgets](analysis.md#analysis-budgets).
 
 Student first-login setup is an exception: `mustChangePassword=true` permits only minimal own-user state, password creation and sign-out/login. No classroom state or routes are accessible until setup completes. Private user/session credential versions revoke older sessions; setup cookies use a distinct prefix and a 15-minute lifetime. See [student logins](student-logins.md).
 
@@ -84,8 +86,9 @@ Student first-login setup is an exception: `mustChangePassword=true` permits onl
 
 - User IDs remain stable. Student emails/rolls are unique; rolls are canonical strings 1–41.
 - Preserve lab/task IDs. Tasks with submissions cannot be removed. Maximum marks cannot fall below recorded grades. Backend computes `totalMarks`.
-- One current submission exists per student/lab/task through application mutations. Resubmission retains its ID, increments revision, replaces work/timestamp and removes its grade. Old revisions are not archived.
+- One current submission exists per student/lab/task through application mutations. Ungraded resubmission retains its ID, increments revision and replaces work/timestamp. Any saved grade, including draft/zero grades, locks replacement for that task. Old revisions are not archived.
 - Grades are finite numbers from zero to the current task maximum. Saving requires the current integer submission revision. Draft grades count in teacher exports and stay hidden from students.
+- Opening a published result can save owner-only `grade.viewedAt` against its current revision/grade timestamp. Read acknowledgements preserve marks, grading time and submission revision; a new grade clears the acknowledgement.
 - `dueDate` is ISO or `""`. Late submissions are accepted and marked. UI deadlines use Pakistan time.
 - Analysis never assigns marks, penalties or AI authorship labels.
 - All writes go through `Store.mutate`. Global database revision and submission revision protect different things; retain both.
@@ -105,7 +108,7 @@ sequenceDiagram
   API->>Store: mutate cloned records
   Store->>DB: labtrack_write_scoped(expected_revision, guards, diff)
   DB-->>Store: New global revision
-  API-->>Student: Submission revision N, grade cleared
+  API-->>Student: Submission revision N (only ungraded work can be replaced)
   Teacher->>API: Read and analyze project
   Teacher->>API: Grade with reviewed revision N
   API->>Store: Validate revision and current maximum
@@ -117,4 +120,4 @@ sequenceDiagram
 
 Scoped SQL compares touched records plus user/lab authorization dependencies, permitting independent writes despite a changed global revision. Persistent conflicts reload then return 409 after one attempt. Serverless conflicts reload and rerun validation for up to eight attempts with increasing jitter and a shared 45-second budget. Never replay a stale snapshot or introduce an unbounded retry.
 
-Lost write acknowledgements trigger a bounded read-only reconciliation, never an automatic transport replay. A confirmed write followed by a failed reload remains acknowledged, and subsequent access must reload successfully. The frontend acknowledges saves separately from state refresh failures. There is no background polling, realtime socket, client router or global state library. See [frontend](frontend.md) and [backend](backend.md).
+Lost write acknowledgements trigger a bounded read-only reconciliation, never an automatic transport replay. A confirmed write followed by a failed reload remains acknowledged, and subsequent access must reload successfully. The frontend acknowledges saves separately from state refresh failures. The student portal refreshes once per minute while visible with no dialog open, and on returning to the tab. There is no realtime socket, client router or global state library. See [frontend](frontend.md) and [backend](backend.md).
