@@ -199,6 +199,28 @@ Create a centered, bordered table with Student ID, Name, Department and GPA head
 
 The suggested file is `lab3_tables_lists.html`; any HTML/HTM filename is accepted. Advisory checks verify table/list structures, merge attributes and selected required text. They do not prove row counts, meaningful merging, table styling, exact content placement or list-marker appearance. Those remain teacher review.
 
+## Lab 4
+
+Prepared from the supplied [Lab 4 DOCX](<../server/fixtures/Web Engineering lab 4.docx>) on 31 October 2026. The owner selected **published for students**, **10 marks per task / 20 total**, and **no deadline**. The original attachment is retained unchanged; its SHA-256 is `21bc32cc4bba91d212012fa8bb8886832d44d69e95ff044b63182a8cb126a0d8`. The document has two task descriptions and two key-tag hint tables, with no embedded images. Its text and tables were extracted directly from OOXML; no replacement document was generated.
+
+The definition is [lab-four.ts](../server/lab-four.ts). The explicit `publish` command appends the single lab through `Store.mutate`. It refuses an edited or duplicate Lab 4; repeating an unchanged addition performs no write, including after a compact Supabase read. Existing lab/task IDs, submissions, private source/image bytes, grades, accounts and sessions are retained. Startup and demo seeds are unchanged. No schema or frontend contract change is required. The command compares full before/after records without printing private contents and never restores an old snapshot over concurrent work.
+
+Published on **31 October 2026** after a verified encrypted classroom backup. The saved published record and attachment matched the prepared assignment exactly. Full before/after digests confirmed all three prior labs and every other classroom record were unchanged, including 52 submissions, their source and raster bytes, seven saved grades, 42 accounts and sessions. All 141 tests and the TypeScript/Vite build passed. Isolated Edge checks passed at desktop 1440×900 and mobile/touch 390×844, verifying teacher editing, student instructions and task selection, keyboard access and an exact-byte handout download. No real student submission or grade was edited for verification.
+
+### Task 1 University Home Page
+
+Use `header` for a university name, `nav` for Home, Departments and Contact links, `section` for university information, `article` for vision and mission, `aside` for news, and `footer` for contact details and copyright text. Use `div` and `span` to organize and style content.
+
+The existing structural checker verifies uploaded HTML, the specified elements, a navigation destination and the three navigation labels in parsed page text. The teacher reviews meaningful content, label placement, working navigation, vision/mission, news, footer information and visual organization. The checklist does not certify those semantic or rendered properties.
+
+### Task 2 Student Registration Form
+
+Create fields for student name, email, password, date of birth and phone number. Use radio buttons for gender, checkboxes for interests/skills, a department dropdown, an address `textarea` with both `required` and `maxlength="20"`, and `fieldset`/`legend` grouping. Provide Submit and Reset controls, and use `required`, `placeholder` and `maxlength` where appropriate.
+
+Structural checks cover the form, text/email/password/date/tel/radio/checkbox inputs, a dropdown option, the required 20-character textarea, fieldset/legend, Submit/Reset controls and a field placeholder. They accept an omitted text-input type and a button's default submit type. Teacher review covers field meaning/labels, radio grouping, choices, appropriate constraints and actual behavior. No backend registration service is prescribed.
+
+Save each task as a separate HTML file, open it in a browser to verify the output, and submit each task separately. The document's task1/task2 names are examples; the existing any-HTML/HTM-filename policy applies. Analysis remains advisory and never changes marks.
+
 ## Submission brief extracted from pasted text
 
 The supplied pasted text requests complete static website submissions through folder upload or ZIP, preserving paths for linked HTML, CSS, JavaScript, images, and nested folders. Every uploaded HTML page should be selectable as a preview entrypoint. It calls for dependency warnings, preview before final submission, timestamps and late status, optional resubmission, per-task marks, and grade export. The preview executes student code on an isolated origin inside a restricted sandbox; folder/ZIP validation needs limits and traversal protection. Server-side applications are outside the initial static-site scope.
