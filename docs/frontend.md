@@ -33,6 +33,8 @@ Instruction attachments in state contain only name, content type and SHA-256 ide
 
 The login screen alone shows a **Need help logging in?** WhatsApp link below the form. It opens a new tab to chat with +49 163 0278010, with a login-help message prefilled for the user to send.
 
+Sign-in and the teacher's initial-student-password field start masked and include an inline **Show/Hide** button. The button reveals only the current field's entered text; it does not submit the form, validate credentials or change the password. It supports keyboard and touch, preserves the input value/autocomplete behavior, and starts masked again when the form reopens. First-login password setup retains its existing Show/Hide passwords control.
+
 The button uses the unmodified white digital glyph from [Meta’s official WhatsApp logo pack](https://www.meta.com/brand/resources/whatsapp/whatsapp-brand/), stored locally as `public/whatsapp-logo-white.svg` (archive file `Digital_Glyph_White_RGB_2026.svg`).
 
 Teachers can open **Students**, select a roll number, enter the student's **Full name** in the profile, and choose **Save name**. Only the name changes; login details, roll numbers and saved work stay intact. Conflicting name edits return a visible error and require a refresh.

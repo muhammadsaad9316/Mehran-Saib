@@ -11,6 +11,8 @@ import {
   GraduationCap,
   ChalkboardTeacher,
   LockKey,
+  Eye,
+  EyeSlash,
 } from "@phosphor-icons/react";
 import type { AppState, Lab, Submission, User } from "../shared/types";
 import { api } from "./api";
@@ -515,6 +517,7 @@ function Login({
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function login(role?: string) {
@@ -585,17 +588,29 @@ function Login({
             placeholder="Teacher email or student roll no."
           />
         </label>
-        <label className="field">
-          Password
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            disabled={busy}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+        <div className="field">
+          <label htmlFor="sign-in-password">Password</label>
+          <div className="password-input">
+            <input
+              id="sign-in-password"
+              type={passwordVisible ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={password}
+              disabled={busy}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button className="password-toggle" type="button" disabled={busy}
+              aria-label={passwordVisible ? "Hide password" : "Show password"}
+              aria-controls="sign-in-password" aria-pressed={passwordVisible}
+              onClick={() => setPasswordVisible(visible => !visible)}>
+              {passwordVisible ? <EyeSlash size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+              <span>{passwordVisible ? "Hide" : "Show"}</span>
+            </button>
+          </div>
+        </div>
         <button className="btn btn-primary full" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
           <span className="login-submit-icon">
@@ -942,6 +957,7 @@ function StudentForm({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -1003,16 +1019,28 @@ function StudentForm({
             Email address
             <input name="email" type="email" required />
           </label>
-          <label className="field">
-            Initial password
-            <input
-              name="password"
-              type="password"
-              minLength={12}
-              required
-              autoComplete="new-password"
-            />
-          </label>
+          <div className="field">
+            <label htmlFor="initial-student-password">Initial password</label>
+            <div className="password-input">
+              <input
+                id="initial-student-password"
+                name="password"
+                type={passwordVisible ? "text" : "password"}
+                minLength={12}
+                required
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+              <button className="password-toggle" type="button" disabled={busy}
+                aria-label={passwordVisible ? "Hide initial password" : "Show initial password"}
+                aria-controls="initial-student-password" aria-pressed={passwordVisible}
+                onClick={() => setPasswordVisible(visible => !visible)}>
+                {passwordVisible ? <EyeSlash size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+                <span>{passwordVisible ? "Hide" : "Show"}</span>
+              </button>
+            </div>
+          </div>
           <p className="muted">
             Share these sign-in details with the student through your normal
             course channel.

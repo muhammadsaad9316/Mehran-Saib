@@ -219,6 +219,12 @@
   box-shadow: none;
 }
 .login-form .field input::placeholder { color: var(--workspace-muted); font-size: 13.5px; }
+.password-input { position: relative; min-width: 0; }
+.login-form .field .password-input input,
+.teacher-minimal .modal .field .password-input input { padding-right: 96px; }
+.password-toggle { position: absolute; inset-block: 0; right: 1px; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 84px; min-height: 44px; padding: 0 12px; border-radius: 0 8px 8px 0; color: var(--workspace-action); font-size: 12px; font-weight: 600; background: transparent; }
+.password-toggle:hover { background: var(--workspace-control); }
+.password-toggle:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: -3px; }
 .login-form .btn,
 .loading-screen .btn {
   min-height: 46px;
